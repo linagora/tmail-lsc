@@ -95,7 +95,7 @@ import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
 
 public class JamesAliasDstServiceTest {
-	private static final URL PRIVATE_KEY = ClassLoader.getSystemResource("conf/private.pem");
+	private static final URL PRIVATE_KEY = ClassLoader.getSystemResource("conf/jwt_privatekey");
 	private static final URL PUBLIC_KEY = ClassLoader.getSystemResource("conf/jwt_publickey");
 	private static final String DOMAIN = "james.org";
 	private static final int JAMES_WEBADMIN_PORT = 8000;
@@ -109,10 +109,11 @@ public class JamesAliasDstServiceTest {
 
 	@BeforeAll
 	static void setup() throws Exception {
-		james = new GenericContainer<>("linagora/james-memory:tmail-0.2.0");
+		james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
 		String webadmin = ClassLoader.getSystemResource("conf/webadmin.properties").getFile();
 		james.withExposedPorts(JAMES_WEBADMIN_PORT)
 			.withFileSystemBind(PUBLIC_KEY.getFile(), "/root/conf/jwt_publickey", BindMode.READ_ONLY)
+			.withFileSystemBind(PRIVATE_KEY.getFile(), "/root/conf/jwt_privatekey", BindMode.READ_ONLY)
 			.withFileSystemBind(webadmin, "/root/conf/webadmin.properties", BindMode.READ_ONLY)
 			.start();
 
@@ -140,7 +141,7 @@ public class JamesAliasDstServiceTest {
 
 		with().basePath("/domains").put(DOMAIN).then().statusCode(HttpStatus.SC_NO_CONTENT);
 	}
-	
+
 	private static String jwtToken() throws Exception {
 		Security.addProvider(new BouncyCastleProvider());
 		KeyFactory factory = KeyFactory.getInstance("RSA", "BC");
@@ -192,7 +193,7 @@ public class JamesAliasDstServiceTest {
 	}
 
 	@Test
-	void jamesAliasesApiShouldReturnEmptyByDefault() throws Exception {
+	void jamesAliasesApiShouldReturnEmptyByDefault() {
 		given().when().get("").then().statusCode(HttpStatus.SC_OK).body("", hasSize(0));
 	}
 
@@ -206,7 +207,7 @@ public class JamesAliasDstServiceTest {
 	}
 
 	@Test
-	void jamesAliasesApiShouldReturnOneUserWhenOneUserWithOneAlias() throws Exception {
+	void jamesAliasesApiShouldReturnOneUserWhenOneUserWithOneAlias() {
 		createAlias("user@james.org", "alias@james.org");
 		given().when().get("").then().statusCode(HttpStatus.SC_OK).body("", hasSize(1));
 	}
