@@ -3,17 +3,16 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>org.lsc.plugins.connectors</groupId>
-	<artifactId>james</artifactId>
-	<name>LDAP Synchronization Connector James plugin</name>
+	<groupId>com.linagora.tmail</groupId>
+	<artifactId>tmail-lsc</artifactId>
+	<name>LDAP Synchronization Connector TMail plugin</name>
 	<version>1.0</version>
 	<description>
-	This project provides a James destination plugin for LSC
+	This project provides a TMail destination plugin for LSC
 	</description>
-	<url>http://lsc-project.org/</url>
 	<issueManagement>
 		<system>github</system>
-		<url>https://github.com/lsc-project/lsc-james-plugin/issues</url>
+		<url>https://github.com/linagora/tmail-lsc/issues</url>
 	</issueManagement>
 	<inceptionYear>2019</inceptionYear>
 	<developers>
@@ -48,16 +47,10 @@
 		</license>
 	</licenses>
 
-	<scm>
-		<connection>scm:git:git://github.com:lsc-project/lsc-james-plugin.git</connection>
-		<developerConnection>scm:git:git@github.com:lsc-project/lsc-james-plugin.git</developerConnection>
-		<url>https://github.com/lsc-project/lsc-james-plugin/</url>
-	</scm>
-
 	<build>
 		<defaultGoal>package</defaultGoal>
 
-		<finalName>lsc-james-plugin-${project.version}</finalName>
+		<finalName>lsc-tmail-plugin-${project.version}</finalName>
 
 		<plugins>
 			<plugin>
@@ -265,22 +258,5 @@
 			</exclusions>
 		</dependency>
 	</dependencies>
-
-	<distributionManagement>
-		<repository>
-			<id>lsc-project.org</id>
-			<url>scp://lsc-project.org:/home/lsc-project/maven</url>
-		</repository>
-		<snapshotRepository>
-			<id>lsc-project.org</id>
-			<url>scp://lsc-project.org:/home/lsc-project/maven</url>
-			<uniqueVersion>false</uniqueVersion>
-		</snapshotRepository>
-	</distributionManagement>
-
-	<ciManagement>
-		<system>travis</system>
-		<url>https://travis-ci.org/lsc-project/</url>
-	</ciManagement>
 
 </project>

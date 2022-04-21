@@ -1,17 +1,15 @@
-# James LSC plugin
+# TMail LSC plugin
 
-[![Build Status](https://travis-ci.org/lsc-project/lsc-james-plugin.svg?branch=master)](https://travis-ci.org/lsc-project/lsc-james-plugin)
-
-This a plugin for LSC, using James REST API
+This a plugin for LSC, using TMail REST API
 
 
 ### Goal
 
-The object of this plugin is to synchronize addresses aliases and users from one referential to a [James server](https://james.apache.org/).
+The object of this plugin is to synchronize addresses aliases and users from one referential to a [TMail server](https://tmail.linagora.com/).
 
 ### Address Aliases Synchronization
 
-For example, it can be used to synchronize the aliases stored in the LDAP of an OBM instance to the James Server(s) of a TMail deployment.
+For example, it can be used to synchronize the aliases stored in the LDAP of an OBM instance to the TMail Server(s) of a TMail deployment.
 
 #### Architecture
 
@@ -24,7 +22,7 @@ mailAlias: remy.kowalsky@linagora.com
 mailAlias: remy@linagora.com
 ```
 
-This will be represented as the following James address alias:
+This will be represented as the following TMail address alias:
 ```bash
 $ curl -XGET http://ip:port/address/aliases/rkowalsky@linagora.com
 
@@ -34,7 +32,7 @@ $ curl -XGET http://ip:port/address/aliases/rkowalsky@linagora.com
 ]
 ```
 
-As addresses aliases in James are only created if there are some sources, an LDAP entry without mailAlias attribute won't be synchronized.
+As addresses aliases in TMail are only created if there are some sources, an LDAP entry without mailAlias attribute won't be synchronized.
 
 The pivot used for the synchronization in the LSC connector is the email address, here `rkowalsky@linagora.com` stored in the `email` attribute.
 
@@ -42,7 +40,7 @@ The destination attribute for the LSC aliases connector is named `sources`.
 
 ### Users Synchronization
 
-For example, it can be used to synchronize the users stored in the LDAP of an OBM instance to the James Server(s) of a TMail deployment.
+For example, it can be used to synchronize the users stored in the LDAP of an OBM instance to the TMail Server(s) of a TMail deployment.
 
 #### Architecture
 Given the following LDAP entries:
@@ -61,7 +59,7 @@ mail: james-user3@james.org
 [...]
 ```
 
-This will be represented as the following James users:
+This will be represented as the following TMail users:
 
 ```bash
 $ curl -XGET http://ip:port/users
@@ -99,30 +97,30 @@ The pivot used for the synchronization in LSC connector is email address. For th
 
 ### Configuration
 
-The plugin connection needs a JWT token to connect to James. To configure this JWT token, set the `password` field of the plugin connection as the JWT token you want to use.
+The plugin connection needs a JWT token to connect to TMail. To configure this JWT token, set the `password` field of the plugin connection as the JWT token you want to use.
 
-The `url` field of the plugin connection must be set to the URL of James' webadmin.
+The `url` field of the plugin connection must be set to the URL of TMail' webadmin.
 
 The `username` field of the plugin is ignored for now.
 
 ### Usage
 
-There is an example of configuration in the `sample` directory. The `lsc.xml` file describe a synchronization from an OBM LDAP to a James server.
+There is an example of configuration in the `sample` directory. The `lsc.xml` file describe a synchronization from an OBM LDAP to a TMail server.
 The values to configure are:
 - `connections.ldapConnection.url`: The URL to the LDAP of OBM
 - `connections.ldapConnection.username`: An LDAP user which is able to read the OBM aliases
 - `connections.ldapConnection.password`: The password of this user
 
-- `connections.pluginConnection.url`: The URL to the James Webadmin
-- `connections.pluginConnection.password`: the JWT token used to connect the James Webadmin, it must includes an admin claim.
+- `connections.pluginConnection.url`: The URL to the TMail Webadmin
+- `connections.pluginConnection.password`: the JWT token used to connect the TMail Webadmin, it must includes an admin claim.
 
 - `tasks.task.ldapSourceService.baseDn`: The search base of the users to synchronize.
 
 
-The domains used in the aliases must have been previously created in James.
+The domains used in the aliases must have been previously created in TMail.
 Otherwise, if a user have a single alias pointing to an unknown domain, none of her aliases will be added.
 
-The jar of the James LSC plugin must be copied in the `lib` directory of your LSC installation.
+The jar of the TMail LSC plugin must be copied in the `lib` directory of your LSC installation.
 Then you can launch it with the following command line:
 
 ```bash
