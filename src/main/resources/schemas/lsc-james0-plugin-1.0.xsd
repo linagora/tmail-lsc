@@ -30,4 +30,11 @@
 			</xsd:complexContent>
 		</xsd:complexType>
 	</xsd:element>
+	<xsd:element name="tmailContactService">
+		<xsd:complexType>
+			<xsd:complexContent>
+				<xsd:extension base="jamesService" />
+			</xsd:complexContent>
+		</xsd:complexType>
+	</xsd:element>
 </xsd:schema>
