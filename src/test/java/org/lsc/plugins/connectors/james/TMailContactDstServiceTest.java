@@ -4,8 +4,12 @@ import static io.restassured.RestAssured.with;
 import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.config.RestAssuredConfig.newConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.hamcrest.Matchers.hasSize;
+import static org.lsc.plugins.connectors.james.TMailContactDstService.EMAIL_KEY;
+import static org.lsc.plugins.connectors.james.TMailContactDstService.FIRSTNAME_KEY;
+import static org.lsc.plugins.connectors.james.TMailContactDstService.SURNAME_KEY;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -18,9 +22,10 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
-import java.util.stream.Stream;
+import java.util.Optional;
 
-import org.apache.commons.lang.RandomStringUtils;
+import javax.ws.rs.NotFoundException;
+
 import org.apache.http.HttpStatus;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMReader;
@@ -28,22 +33,23 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.lsc.LscDatasetModification;
 import org.lsc.LscDatasets;
 import org.lsc.LscModificationType;
 import org.lsc.LscModifications;
+import org.lsc.beans.IBean;
 import org.lsc.configuration.PluginConnectionType;
 import org.lsc.configuration.PluginDestinationServiceType;
 import org.lsc.configuration.ServiceType.Connection;
 import org.lsc.configuration.TaskType;
+import org.lsc.plugins.connectors.james.beans.Contact;
 import org.lsc.plugins.connectors.james.generated.TMailContactService;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -51,27 +57,26 @@ import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
 
-public class TMailContactDstServiceTest {
-    public static final String ADD_CONTACT_PATH = "/domains/%s/contacts";
+class TMailContactDstServiceTest {
     public static final String GET_ALL_CONTACT_PATH = "/domains/contacts";
-    public static final String GET_CONTACT_PATH = "/domains/%s/contacts/%s";
-    public static final String UPDATE_CONTACT_PATH = "/domains/%s/contacts/%";
-    public static final String DELETE_CONTACT_PATH = "/domains/%s/contacts/%";
     public static final String DOMAIN = "james.org";
-    public static final String USER = "bob@" + DOMAIN;
     private static final URL PRIVATE_KEY = ClassLoader.getSystemResource("conf/jwt_privatekey");
     private static final URL PUBLIC_KEY = ClassLoader.getSystemResource("conf/jwt_publickey");
     private static final int JAMES_WEBADMIN_PORT = 8000;
     private static final boolean FROM_SAME_SERVICE = true;
+    private static final Contact CONTACT_RENE = new Contact("renecordier@james.org", Optional.of("Rene"), Optional.of("Cordier"));
+    private static final Contact CONTACT_RENE_WITHOUT_NAMES = new Contact("renecordier@james.org", Optional.empty(), Optional.empty());
+    private static final Contact CONTACT_TUNG = new Contact("tungtranvan@james.org", Optional.of("Tung"), Optional.of("Tran Van"));
+    private static final Contact CONTACT_WITHOUT_NAMES = new Contact("nonnames@james.org", Optional.empty(), Optional.empty());
+    private static final Contact CONTACT_WITH_NAMES = new Contact("nonnames@james.org", Optional.of("Firstname"), Optional.of("Surname"));
 
     private static GenericContainer<?> james;
-    private static TaskType task;
-    private static int MAPPED_JAMES_WEBADMIN_PORT;
     private static TMailContactDstService testee;
+    private static JamesDao jamesDao;
 
     @BeforeAll
     static void setup() throws Exception {
-        james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
+        james = new GenericContainer<>("quanth99/tmail:memory-contact-routes");
         String webadmin = ClassLoader.getSystemResource("conf/webadmin.properties").getFile();
         james.withExposedPorts(JAMES_WEBADMIN_PORT)
             .withFileSystemBind(PUBLIC_KEY.getFile(), "/root/conf/jwt_publickey", BindMode.READ_ONLY)
@@ -79,13 +84,13 @@ public class TMailContactDstServiceTest {
             .withFileSystemBind(webadmin, "/root/conf/webadmin.properties", BindMode.READ_ONLY)
             .start();
 
-        MAPPED_JAMES_WEBADMIN_PORT = james.getMappedPort(JAMES_WEBADMIN_PORT);
+        int MAPPED_JAMES_WEBADMIN_PORT = james.getMappedPort(JAMES_WEBADMIN_PORT);
 
         TMailContactService tmailContactService = mock(TMailContactService.class);
         PluginDestinationServiceType pluginDestinationService = mock(PluginDestinationServiceType.class);
         PluginConnectionType jamesConnection = mock(PluginConnectionType.class);
         Connection connection = mock(Connection.class);
-        task = mock(TaskType.class);
+        TaskType task = mock(TaskType.class);
 
         when(jamesConnection.getUrl()).thenReturn("http://localhost:" + MAPPED_JAMES_WEBADMIN_PORT);
         when(jamesConnection.getPassword()).thenReturn(jwtToken());
@@ -104,6 +109,7 @@ public class TMailContactDstServiceTest {
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
 
         with().basePath("/domains").put(DOMAIN).then().statusCode(HttpStatus.SC_NO_CONTENT);
+        jamesDao = new JamesDao("http://localhost:" + MAPPED_JAMES_WEBADMIN_PORT, jwtToken(), task);
     }
 
     private static String jwtToken() throws Exception {
@@ -128,7 +134,7 @@ public class TMailContactDstServiceTest {
     }
 
     private static RSAPrivateKey getPrivateKey() throws Exception {
-        try (PEMReader pemReader = new PEMReader(new FileReader(PRIVATE_KEY.getFile()), () -> "james".toCharArray())) {
+        try (PEMReader pemReader = new PEMReader(new FileReader(PRIVATE_KEY.getFile()), "james"::toCharArray)) {
             Object readObject = pemReader.readObject();
             return (RSAPrivateKey) ((java.security.KeyPair) readObject).getPrivate();
         }
@@ -140,203 +146,230 @@ public class TMailContactDstServiceTest {
     }
 
     @AfterEach
-    void removeAllContact() throws Exception {
-        JamesDao jamesDao = new JamesDao("http://localhost:" + MAPPED_JAMES_WEBADMIN_PORT, jwtToken(), task);
+    void removeAllContact() {
         jamesDao.getUsersListViaDomainContacts()
                 .forEach(user -> jamesDao.removeDomainContact(user.email));
     }
 
-    // TODO rewrite tests for contact case
-
     @Test
-    void jamesUserListShouldReturnEmptyWhenNoUser() {
+    void getAllContactShouldReturnEmptyByDefault() {
         with()
-            .get("")
+            .get(GET_ALL_CONTACT_PATH)
         .then()
             .statusCode(HttpStatus.SC_OK)
             .body("", hasSize(0));
     }
 
     @Test
-    void getListPivotsShouldReturnEmptyWhenNoUser() throws Exception {
+    void getListPivotsShouldReturnEmptyWhenNoContact() throws Exception {
         Map<String, LscDatasets> listPivots = testee.getListPivots();
 
         assertThat(listPivots).isEmpty();
     }
 
     @Test
-    void getListPivotsShouldReturnOneWhenOneUser() throws Exception {
-        createUsers(USER);
+    void getListPivotsShouldReturnOneWhenOneContact() throws Exception {
+        createContact(CONTACT_RENE);
 
         Map<String, LscDatasets> listPivots = testee.getListPivots();
 
         assertSoftly(softly -> {
-            softly.assertThat(listPivots).containsOnlyKeys(USER);
-            softly.assertThat(listPivots.get(USER).getStringValueAttribute("email")).isEqualTo(USER);
+            softly.assertThat(listPivots).containsOnlyKeys(CONTACT_RENE.getEmailAddress());
+            softly.assertThat(listPivots.get(CONTACT_RENE.getEmailAddress()).getStringValueAttribute("email")).isEqualTo(CONTACT_RENE.getEmailAddress());
         });
     }
 
     @Test
-    void getListPivotsShouldReturnTwoWhenTwoUsers() throws Exception {
-        String user1 = "user1@james.org";
-        String user2 = "user2@james.org";
-        createUsers(user1);
-        createUsers(user2);
+    void getListPivotsShouldReturnTwoWhenTwoContacts() throws Exception {
+        createContact(CONTACT_RENE);
+        createContact(CONTACT_TUNG);
 
         Map<String, LscDatasets> listPivots = testee.getListPivots();
 
         assertSoftly(softly -> {
             softly.assertThat(listPivots).hasSize(2);
-            softly.assertThat(listPivots).containsOnlyKeys(user1, user2);
+            softly.assertThat(listPivots).containsOnlyKeys(CONTACT_RENE.getEmailAddress(), CONTACT_TUNG.getEmailAddress());
         });
     }
 
     @Test
-    void createUserShouldSuccessWhenMissingUser() throws Exception {
+    void createShouldFailWhenMainIdentifierIsMissing() throws Exception {
         LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
-        modifications.setMainIdentifer(USER);
         modifications.setLscAttributeModifications(ImmutableList.of());
 
         boolean applied = testee.apply(modifications);
-        assertThat(applied).isTrue();
 
-        with()
-            .head(USER)
-            .then()
-            .statusCode(HttpStatus.SC_OK);
-    }
-
-    @Test
-    void createUserShouldReturnFalseWhenUserIsExisting() throws Exception {
-        createUsers(USER);
-        LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
-        modifications.setMainIdentifer(USER);
-        modifications.setLscAttributeModifications(ImmutableList.of());
-
-        boolean applied = testee.apply(modifications);
         assertThat(applied).isFalse();
     }
 
     @Test
-    void createUserShouldReturnFalseWhenMissingDomainPart() throws Exception {
+    void createContactShouldSucceedWhenMissingContactNames() throws Exception {
         LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
-        modifications.setMainIdentifer("user");
+        modifications.setMainIdentifer(CONTACT_WITHOUT_NAMES.getEmailAddress());
         modifications.setLscAttributeModifications(ImmutableList.of());
 
         boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isTrue();
+        assertThat(jamesDao.getContact(CONTACT_WITHOUT_NAMES.getEmailAddress())).isEqualTo(CONTACT_WITHOUT_NAMES);
+    }
+
+    @Test
+    void createContactShouldSucceedWhenHavingContactNames() throws Exception {
+        LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
+        LscDatasetModification firstname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.ADD_VALUES, FIRSTNAME_KEY, ImmutableList.of(CONTACT_RENE.getFirstname().get()));
+        LscDatasetModification surname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.ADD_VALUES, SURNAME_KEY, ImmutableList.of(CONTACT_RENE.getSurname().get()));
+        modifications.setLscAttributeModifications(ImmutableList.of(firstname, surname));
+
+        boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isTrue();
+        assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress())).isEqualTo(CONTACT_RENE);
+    }
+
+    @Test
+    void updateWithMissingContactModificationShouldFail() throws Exception {
+        createContact(CONTACT_RENE);
+
+        LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
+        modifications.setLscAttributeModifications(ImmutableList.of());
+
+        boolean applied = testee.apply(modifications);
+
         assertThat(applied).isFalse();
+        assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress())).isEqualTo(CONTACT_RENE);
     }
 
     @Test
-    void removeUserShouldSuccessWhenDanglingUser() throws Exception {
-        createUsers(USER);
+    void updateWithEmptyNamesShouldClearNamesOfThatContact() throws Exception {
+        createContact(CONTACT_RENE);
+
+        LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
+        LscDatasetModification emptyFirstname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.REPLACE_VALUES, FIRSTNAME_KEY, ImmutableList.of(""));
+        LscDatasetModification emptySurname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.REPLACE_VALUES, SURNAME_KEY, ImmutableList.of(""));
+        modifications.setLscAttributeModifications(ImmutableList.of(emptyFirstname, emptySurname));
+
+        boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isTrue();
+        assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress())).isEqualTo(CONTACT_RENE_WITHOUT_NAMES);
+    }
+
+    @Test
+    void updateWithOtherNamesShouldSucceed() throws Exception {
+        createContact(CONTACT_WITHOUT_NAMES);
+
+        LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_WITHOUT_NAMES.getEmailAddress());
+        LscDatasetModification firstname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.REPLACE_VALUES, FIRSTNAME_KEY, ImmutableList.of("Firstname"));
+        LscDatasetModification surname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.REPLACE_VALUES, SURNAME_KEY, ImmutableList.of("Surname"));
+        modifications.setLscAttributeModifications(ImmutableList.of(firstname, surname));
+
+        boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isTrue();
+        assertThat(jamesDao.getContact(CONTACT_WITHOUT_NAMES.getEmailAddress())).isEqualTo(CONTACT_WITH_NAMES);
+    }
+
+    @Test
+    void shouldSupportPartialUpdate() throws Exception {
+        createContact(CONTACT_RENE);
+
+        LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
+        LscDatasetModification surname = new LscDatasetModification(LscDatasetModification.LscDatasetModificationType.REPLACE_VALUES, SURNAME_KEY, ImmutableList.of("Surname"));
+        modifications.setLscAttributeModifications(ImmutableList.of(surname));
+
+        boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isTrue();
+        // Wait for webadmin fix support partial update
+        assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress())).isEqualTo(new Contact(CONTACT_RENE.getEmailAddress(),
+            CONTACT_RENE.getFirstname(), Optional.of("Surname")));
+    }
+
+    @Test
+    void deleteShouldRemoveWhenTheContactExists() throws Exception {
+        createContact(CONTACT_RENE);
 
         LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
-        modifications.setMainIdentifer(USER);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
         modifications.setLscAttributeModifications(ImmutableList.of());
 
         boolean applied = testee.apply(modifications);
+
         assertThat(applied).isTrue();
-        with()
-            .get(USER)
-        .then()
-            .statusCode(HttpStatus.SC_NOT_FOUND);
+        // Wait for webadmin fix return 404 instead 200
+        assertThatThrownBy(() -> jamesDao.getContact(CONTACT_RENE.getEmailAddress()))
+            .isInstanceOf(NotFoundException.class);
     }
 
     @Test
-    void removeUserShouldSucceedWhenUserDoesNotExist() throws Exception {
+    void deleteShouldSucceedWhenTheContactDoesNotExist() throws Exception {
         LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
-        modifications.setMainIdentifer(USER);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
         modifications.setLscAttributeModifications(ImmutableList.of());
 
         boolean applied = testee.apply(modifications);
+
         assertThat(applied).isTrue();
-        with()
-            .get(USER)
-        .then()
-            .statusCode(HttpStatus.SC_NOT_FOUND);
+        // Wait for webadmin fix return 404 instead 200
+        assertThatThrownBy(() -> jamesDao.getContact(CONTACT_RENE.getEmailAddress()))
+            .isInstanceOf(NotFoundException.class);
     }
 
     @Test
-    void removeUserShouldNotRemoveAllUsers() throws Exception {
-        String user1 = "user1@james.org";
-        String user2 = "user2@james.org";
-        createUsers(user1);
-        createUsers(user2);
-
-        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
-        modifications.setMainIdentifer(user1);
-        modifications.setLscAttributeModifications(ImmutableList.of());
-
-        boolean applied = testee.apply(modifications);
-        assertThat(applied).isTrue();
-
-        with()
-            .head(user2)
-        .then()
-            .statusCode(HttpStatus.SC_OK);
-    }
-
-    @ParameterizedTest
-    @MethodSource("nonSupportedOperations")
-    void nonsupportOperationShouldNotRemoveUser(LscModificationType lscModificationType) throws Exception {
-        createUsers(USER);
-
-        LscModifications modifications = new LscModifications(lscModificationType);
-        modifications.setMainIdentifer(USER);
-        modifications.setLscAttributeModifications(ImmutableList.of());
-
-        boolean applied = testee.apply(modifications);
-        assertThat(applied).isTrue();
-
-        with()
-            .head(USER)
-        .then()
-            .statusCode(HttpStatus.SC_OK);
-    }
-
-    @ParameterizedTest
-    @MethodSource("nonSupportedOperations")
-    void nonsupportOperationShouldNotAddUser(LscModificationType lscModificationType) throws Exception {
-        LscModifications modifications = new LscModifications(lscModificationType);
-        modifications.setMainIdentifer(USER);
-        modifications.setLscAttributeModifications(ImmutableList.of());
-
-        boolean applied = testee.apply(modifications);
-        assertThat(applied).isTrue();
-
-        with()
-            .head(USER)
-            .then()
-            .statusCode(HttpStatus.SC_NOT_FOUND);
+    void getBeanShouldReturnNullWhenEmptyDataset() throws Exception {
+        assertThat(testee.getBean("email", new LscDatasets(), FROM_SAME_SERVICE)).isNull();
     }
 
     @Test
-    void getBeanShouldReturnNullWhenUserDoesNotExist() throws Exception {
-        LscDatasets datasets = new LscDatasets(ImmutableMap.of("email", USER));
-        assertThat(testee.getBean("email", datasets, FROM_SAME_SERVICE)).isNull();
+    void getBeanShouldReturnNullWhenNoMatchingContact() throws Exception {
+        LscDatasets nonExistingIdDataset = new LscDatasets(ImmutableMap.of("email", "nonExistingEmail@james.org"));
+
+        // Wait for webadmin fix return 404 instead 200
+        assertThat(testee.getBean("email", nonExistingIdDataset, FROM_SAME_SERVICE)).isNull();
     }
 
     @Test
-    void getBeanShouldReturnNotNullWhenUserExists() throws Exception {
-        createUsers(USER);
+    void getBeanShouldNotReturnNullWhenContactExists() throws Exception {
+        createContact(CONTACT_RENE);
 
-        LscDatasets datasets = new LscDatasets(ImmutableMap.of("email", USER));
+        LscDatasets datasets = new LscDatasets(ImmutableMap.of("email", CONTACT_RENE.getEmailAddress()));
         assertThat(testee.getBean("email", datasets, FROM_SAME_SERVICE)).isNotNull();
     }
 
-    static Stream<Arguments> nonSupportedOperations() {
-        return Stream.of(
-            LscModificationType.UPDATE_OBJECT,
-            LscModificationType.CHANGE_ID)
-            .map(Arguments::of);
+    @Test
+    void getBeanShouldReturnContactWithNamesWhenContactExistsAndHaveNames() throws Exception {
+        createContact(CONTACT_RENE);
+
+        LscDatasets datasets = new LscDatasets(ImmutableMap.of("email", CONTACT_RENE.getEmailAddress()));
+        IBean bean = testee.getBean("email", datasets, FROM_SAME_SERVICE);
+
+        assertThat(bean.getMainIdentifier()).isEqualTo(CONTACT_RENE.getEmailAddress());
+        assertThat(bean.getDatasetFirstValueById(EMAIL_KEY)).isEqualTo(CONTACT_RENE.getEmailAddress());
+        assertThat(bean.getDatasetFirstValueById(FIRSTNAME_KEY)).isEqualTo(CONTACT_RENE.getFirstname().get());
+        assertThat(bean.getDatasetFirstValueById(SURNAME_KEY)).isEqualTo(CONTACT_RENE.getSurname().get());
     }
 
-    private void createUsers(String user) {
-        with()
-            .body("{\"password\":\"" + RandomStringUtils.randomAlphanumeric(24) + "\"}")
-            .put("/{user}", user)
-        .then()
-            .statusCode(HttpStatus.SC_NO_CONTENT);
+    @Test
+    void getBeanShouldReturnContactWithoutNamesWhenContactExistsAndHaveNoNames() throws Exception {
+        createContact(CONTACT_WITHOUT_NAMES);
+
+        LscDatasets datasets = new LscDatasets(ImmutableMap.of("email", CONTACT_WITHOUT_NAMES.getEmailAddress()));
+        IBean bean = testee.getBean("email", datasets, FROM_SAME_SERVICE);
+
+        assertThat(bean.getMainIdentifier()).isEqualTo(CONTACT_WITHOUT_NAMES.getEmailAddress());
+        assertThat(bean.getDatasetFirstValueById(EMAIL_KEY)).isEqualTo(CONTACT_WITHOUT_NAMES.getEmailAddress());
+        assertThat(bean.getDatasetFirstValueById(FIRSTNAME_KEY)).isEmpty();
+        assertThat(bean.getDatasetFirstValueById(SURNAME_KEY)).isEmpty();
+    }
+
+    private void createContact(Contact contact) throws JsonProcessingException {
+        boolean isCreatedSucceed = jamesDao.addDomainContact(contact);
+        assertThat(isCreatedSucceed).isTrue();
     }
 }

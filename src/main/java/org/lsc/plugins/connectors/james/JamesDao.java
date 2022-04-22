@@ -42,6 +42,7 @@
  */
 package org.lsc.plugins.connectors.james;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -59,17 +60,20 @@ import org.glassfish.jersey.jackson.JacksonFeature;
 import org.lsc.configuration.TaskType;
 import org.lsc.plugins.connectors.james.beans.Alias;
 import org.lsc.plugins.connectors.james.beans.Contact;
-import org.lsc.plugins.connectors.james.beans.ContactDTO;
 import org.lsc.plugins.connectors.james.beans.User;
 import org.lsc.plugins.connectors.james.beans.UserDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+
 public class JamesDao {
 	
 	public static final String ALIASES_PATH = "/address/aliases"; 
 	public static final String USERS_PATH = "/users";
-	public static final String DOMAIN_CONTACT_PATH = "/domains/%s/contacts/%";
+	public static final String DOMAIN_CONTACT_PATH = "/domains/%s/contacts/%s";
 	public static final int HTTP_STATUS_CODE_USER_EXITS = Status.OK.getStatusCode();
 	public static final int HTTP_STATUS_CODE_USER_DOES_NOT_EXITS = Status.NOT_FOUND.getStatusCode();
 
@@ -77,8 +81,9 @@ public class JamesDao {
 
 	private final WebTarget aliasesClient;
 	private final WebTarget usersClient;
-	private final WebTarget contactClient;
+	private final WebTarget contactsClient;
 	private final String authorizationBearer;
+	private final ObjectMapper mapper;
 	
 	public JamesDao(String url, String token, TaskType task) {
 		authorizationBearer = "Bearer " + token;
@@ -92,9 +97,11 @@ public class JamesDao {
 			.target(url)
 			.path(USERS_PATH);
 
-		contactClient = ClientBuilder.newClient()
+		contactsClient = ClientBuilder.newClient()
 			.register(JacksonFeature.class)
 			.target(url);
+
+		mapper = new ObjectMapper().registerModule(new Jdk8Module());
 	}
 
 	public List<Alias> getAliases(String email) {
@@ -281,30 +288,30 @@ public class JamesDao {
 		throw new JamesClientException(usersClient.getUri(), HttpMethod.HEAD, response);
 	}
 
-	public boolean addDomainContact(Contact contact) {
-		Response response = contactClient
+	public boolean addDomainContact(Contact contact) throws JsonProcessingException {
+		Response response = contactsClient
 			.path(String.format("/domains/%s/contacts", contact.getDomain()))
 			.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.post(Entity.json(contact));
+			.post(Entity.text(mapper.writeValueAsString(contact)));
 
 		String rawResponseBody = response.readEntity(String.class);
 		response.close();
 		if (checkResponse(response)) {
-			LOGGER.debug("Create domain contact {} is successful", contact.getEmail());
+			LOGGER.debug("Create domain contact {} is successful", contact.getEmailAddress());
 			return true;
 		} else {
 			LOGGER.error(String.format("Error %d (%s - %s) while creating domain contact: %s",
 				response.getStatus(),
 				response.getStatusInfo(),
 				rawResponseBody,
-				contactClient.getUri().toString()));
+				contactsClient.getUri().toString()));
 			return false;
 		}
 	}
 
 	public List<User> getUsersListViaDomainContacts() {
-		WebTarget target = contactClient.path("/domains/contacts");
+		WebTarget target = contactsClient.path("/domains/contacts");
 		LOGGER.debug("GETting users with domain contacts list: " + target.getUri().toString());
 		List<String> users = target.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
@@ -314,48 +321,45 @@ public class JamesDao {
 			.collect(Collectors.toList());
 	}
 
-	public ContactDTO getContactDTO(String email) {
-		WebTarget target = contactClient.path(String.format(DOMAIN_CONTACT_PATH, Contact.extractDomainFromEmail(email),
+	public Contact getContact(String email) throws IOException {
+		WebTarget target = contactsClient.path(String.format(DOMAIN_CONTACT_PATH, Contact.extractDomainFromEmail(email),
 			Contact.extractUsernameFromEmail(email)));
 		LOGGER.debug("GETting contact: " + target.getUri().toString());
-		ContactDTO contactDTO = target.request()
-			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.get(new GenericType<ContactDTO>(){});
 		Response response = target.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
 			.get();
 		if (checkResponse(response)) {
 			LOGGER.debug("Get domain contact {} is successful", email);
-			return response.readEntity(ContactDTO.class);
+			return mapper.readValue(response.readEntity(String.class), Contact.class);
 		} else {
 			throw new NotFoundException();
 		}
 	}
 
-	public boolean updateDomainContact(Contact contact) {
-		Response response = contactClient
+	public boolean updateDomainContact(Contact contact) throws JsonProcessingException {
+		Response response = contactsClient
 			.path(String.format(DOMAIN_CONTACT_PATH, contact.getDomain(), contact.getUsernameFromEmail()))
 			.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.put(Entity.json(contact.getContactNames()));
+			.put(Entity.text(mapper.writeValueAsString(contact.getContactNames())));
 
 		String rawResponseBody = response.readEntity(String.class);
 		response.close();
 		if (checkResponse(response)) {
-			LOGGER.debug("Create domain contact {} is successful", contact.getEmail());
+			LOGGER.debug("Create domain contact {} is successful", contact.getEmailAddress());
 			return true;
 		} else {
 			LOGGER.error(String.format("Error %d (%s - %s) while creating domain contact: %s",
 				response.getStatus(),
 				response.getStatusInfo(),
 				rawResponseBody,
-				contactClient.getUri().toString()));
+				contactsClient.getUri().toString()));
 			return false;
 		}
 	}
 
 	public boolean removeDomainContact(String email) {
-		Response response = contactClient
+		Response response = contactsClient
 			.path(String.format(DOMAIN_CONTACT_PATH, Contact.extractDomainFromEmail(email), Contact.extractUsernameFromEmail(email)))
 			.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)

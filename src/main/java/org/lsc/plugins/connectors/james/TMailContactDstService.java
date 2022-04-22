@@ -1,5 +1,6 @@
 package org.lsc.plugins.connectors.james;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,13 +19,14 @@ import org.lsc.exception.LscServiceCommunicationException;
 import org.lsc.exception.LscServiceConfigurationException;
 import org.lsc.exception.LscServiceException;
 import org.lsc.plugins.connectors.james.beans.Contact;
-import org.lsc.plugins.connectors.james.beans.ContactDTO;
 import org.lsc.plugins.connectors.james.beans.User;
 import org.lsc.plugins.connectors.james.generated.JamesService;
 import org.lsc.plugins.connectors.james.generated.TMailContactService;
 import org.lsc.service.IWritableService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 public class TMailContactDstService implements IWritableService {
     public static final String EMAIL_KEY = "email";
@@ -40,7 +42,7 @@ public class TMailContactDstService implements IWritableService {
         try {
             if (task.getPluginDestinationService().getAny() == null
                 || task.getPluginDestinationService().getAny().size() != 1
-                || !((task.getPluginDestinationService().getAny().get(0) instanceof TMailContactService))) {
+                || !(task.getPluginDestinationService().getAny().get(0) instanceof TMailContactService)) {
                 throw new LscServiceConfigurationException("Unable to identify the James service configuration inside the plugin source node of the task: " + task.getName());
             } else {
                 this.service = (JamesService) task.getPluginDestinationService().getAny().get(0);
@@ -68,14 +70,19 @@ public class TMailContactDstService implements IWritableService {
                 case CREATE_OBJECT:
                     return jamesDao.addDomainContact(extractContact(lscModifications));
                 case UPDATE_OBJECT:
-                    return jamesDao.updateDomainContact(extractContact(lscModifications));
+                    Contact updateContact = extractContact(lscModifications);
+                    if (updateContact.getFirstname().isPresent() || updateContact.getSurname().isPresent()) {
+                        return jamesDao.updateDomainContact(extractContact(lscModifications));
+                    } else {
+                        return false;
+                    }
                 case DELETE_OBJECT:
-                    return jamesDao.removeDomainContact(extractContact(lscModifications).getEmail());
+                    return jamesDao.removeDomainContact(extractContact(lscModifications).getEmailAddress());
                 default:
                     LOGGER.debug("{} operation, ignored.", lscModifications.getOperation());
                     return true;
             }
-        } catch (ProcessingException exception) {
+        } catch (ProcessingException | JsonProcessingException exception) {
             LOGGER.error(String.format("ProcessingException while writing (%s)", exception));
             LOGGER.debug(exception.toString(), exception);
             return false;
@@ -99,8 +106,8 @@ public class TMailContactDstService implements IWritableService {
             return null;
         }
         try {
-            ContactDTO contactDTO = jamesDao.getContactDTO(email);
-            return contactDTOToBean(contactDTO);
+            Contact contact = jamesDao.getContact(email);
+            return contactToBean(contact);
         } catch (ProcessingException e) {
             LOGGER.error(String.format("ProcessingException while getting bean %s/%s (%s)",
                 pivotName, email, e));
@@ -111,6 +118,11 @@ public class TMailContactDstService implements IWritableService {
             return null;
         } catch (WebApplicationException e) {
             LOGGER.error(String.format("WebApplicationException while getting bean %s/%s (%s)",
+                pivotName, email, e));
+            LOGGER.debug(e.toString(), e);
+            throw new LscServiceException(e);
+        } catch (IOException e) {
+            LOGGER.error(String.format("IOException while getting bean %s/%s (%s)",
                 pivotName, email, e));
             LOGGER.debug(e.toString(), e);
             throw new LscServiceException(e);
@@ -146,25 +158,29 @@ public class TMailContactDstService implements IWritableService {
     }
 
     private Optional<String> extractFirstname(LscModifications lscModifications) {
-        return Optional.ofNullable(lscModifications.getModificationsItemsByHash().get(FIRSTNAME_KEY).get(0)).map(String.class::cast);
+        return Optional.ofNullable(lscModifications.getModificationsItemsByHash().get(FIRSTNAME_KEY))
+            .filter(list -> !list.isEmpty())
+            .map(list -> (String) list.get(0));
     }
 
     private Optional<String> extractSurname(LscModifications lscModifications) {
-        return Optional.ofNullable(lscModifications.getModificationsItemsByHash().get(SURNAME_KEY).get(0)).map(String.class::cast);
+        return Optional.ofNullable(lscModifications.getModificationsItemsByHash().get(SURNAME_KEY))
+            .filter(list -> !list.isEmpty())
+            .map(list -> (String) list.get(0));
     }
 
-    private IBean contactDTOToBean(ContactDTO contactDTO) throws InstantiationException, IllegalAccessException {
+    private IBean contactToBean(Contact contact) throws InstantiationException, IllegalAccessException {
         IBean bean = beanClass.newInstance();
-        bean.setMainIdentifier(contactDTO.getEmailAddress());
-        bean.setDatasets(toDataset(contactDTO));
+        bean.setMainIdentifier(contact.getEmailAddress());
+        bean.setDatasets(toDataset(contact));
         return bean;
     }
 
-    private LscDatasets toDataset(ContactDTO contactDTO) {
+    private LscDatasets toDataset(Contact contact) {
         LscDatasets datasets = new LscDatasets();
-        datasets.put(EMAIL_KEY, contactDTO.getEmailAddress());
-        datasets.put(FIRSTNAME_KEY, contactDTO.getFirstname());
-        datasets.put(SURNAME_KEY, contactDTO.getSurname());
+        datasets.put(EMAIL_KEY, contact.getEmailAddress());
+        contact.getFirstname().ifPresent(firstname -> datasets.put(FIRSTNAME_KEY, firstname));
+        contact.getSurname().ifPresent(surname -> datasets.put(SURNAME_KEY, surname));
         return datasets;
     }
 }
