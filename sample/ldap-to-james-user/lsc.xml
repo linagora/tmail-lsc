@@ -1,0 +1,74 @@
+<?xml version="1.0" ?>
+<lsc xmlns="http://lsc-project.org/XSD/lsc-core-2.1.xsd" xmlns:james="http://lsc-project.org/XSD/lsc-james0-plugin-1.0.xsd" revision="0">
+  <connections>
+    <ldapConnection>
+      <name>openldap</name>
+      <url>ldap://localhost:49692/dc=james,dc=org</url>
+      <username>cn=admin,dc=james,dc=org</username>
+      <password>mysecretpassword</password>
+      <authentication>SIMPLE</authentication>
+      <referral>THROW</referral>
+      <derefAliases>NEVER</derefAliases>
+      <version>VERSION_3</version>
+      <pageSize>-1</pageSize>
+      <factory>com.sun.jndi.ldap.LdapCtxFactory</factory>
+      <tlsActivated>false</tlsActivated>
+      <saslMutualAuthentication>false</saslMutualAuthentication>
+    </ldapConnection>
+    <pluginConnection implementationClass="org.lsc.plugins.connectors.james.generated.jamesConnectionType">
+      <name>james</name>
+      <url>http://localhost:49677/</url>
+      <username>admin@james.org</username>
+      <password>eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhZG1pbkBqYW1lcy5vcmciLCJhZG1pbiI6dHJ1ZSwiaWF0IjoxNjIzNjQ0MzM3fQ.G6KghzAL35NHTTF8hhSCez9ksEjKD6yRSdYd5tgGX3o10ge2RLkkQbmNMEKwsbewxU9J_V45s4_H4F8BGJpg9TyuTMTGl7vbtlcB1qUM8OH7sa5FWxJCnVRzwqmclEDiUVP9YhCwK2fzlXvb444D3hfDZufvQD0FFRAvt8szRzS5mb2q0Hg2sWFtyjuisORNnsB0egqMiJ9fcdKgd9vBuRfm-BlKUhIkv8PPX5Hldh-RARWPKQq7exKZZs40LLv3of2Mhx-08-o9gwHBw8jXuAgABoSZxLkwb2V5Od41JW8JaF7-CkXNWqsme4jFx3hmLw-FvolzrrdcH8Q9ty32l2BR6XMjDGBv7cRfAM7OTfNTwHz5LYSNoy1kRdCCC_cALotD2vJrcFzk_CrtL6fFZyn5vAm3oeA2vM3MCTiOWXdM3h_OU3Ec0ogVn2cso9-Sv8RJGhHsGxmPTD8L5Y7niBy8j4EdnDqeR6Ms7IayzXe1DVFgk_hyWYDgEPglknU6VNLsaEz2-L4gu0SGAfL8NMkGoLAmAxKPq704EQunmKsotWZhucfzYnMXx-o3z1v1bidpWnB9nh1xUHrGrvDOn-ckAo2C6hrjsODssR3WZGGLFw12Kp8w9BdVyAOYobmFLuSK_pnXDPAncjKeG3sMxfuKRf7phQXiZDZns8lVT24</password>
+    </pluginConnection>
+  </connections>
+  <audits/>
+  <tasks>
+    <task>
+      <name>userSynchronization</name>
+      <bean>org.lsc.beans.SimpleBean</bean>
+      <ldapSourceService>
+        <name>openldap-user</name>
+        <connection reference="openldap"/>
+        <baseDn>ou=people,dc=james,dc=org</baseDn>
+        <pivotAttributes>
+          <string>mail</string>
+        </pivotAttributes>
+        <fetchedAttributes>
+          <string>mail</string>
+        </fetchedAttributes>
+        <getAllFilter>(&amp;(objectClass=inetOrgPerson)(mail=*))</getAllFilter>
+        <getOneFilter>(&amp;(objectClass=inetOrgPerson)(mail={mail}))</getOneFilter>
+        <cleanFilter>(&amp;(objectClass=inetOrgPerson)(mail={email}))</cleanFilter>
+      </ldapSourceService>
+      <pluginDestinationService implementationClass="org.lsc.plugins.connectors.james.JamesUserDstService">
+        <name>james-user-dst</name>
+        <connection reference="james" />
+        <james:jamesUsersService>
+          <name>james-user-service-dst</name>
+          <connection reference="james" />
+          <james:writableAttributes>
+            <string>mail</string>
+          </james:writableAttributes>
+        </james:jamesUsersService>
+      </pluginDestinationService>
+      <propertiesBasedSyncOptions>
+        <mainIdentifier>srcBean.getDatasetFirstValueById('mail');</mainIdentifier>
+        <defaultDelimiter>;</defaultDelimiter>
+        <defaultPolicy>FORCE</defaultPolicy>
+        <conditions>
+          <create>true</create>
+          <update>false</update>
+          <delete>true</delete>
+          <changeId>false</changeId>
+        </conditions>
+        <dataset>
+          <name>email</name>
+          <forceValues>
+            <string>srcBean.getDatasetFirstValueById("mail")</string>
+          </forceValues>
+        </dataset>
+      </propertiesBasedSyncOptions>
+    </task>
+  </tasks>
+</lsc>
