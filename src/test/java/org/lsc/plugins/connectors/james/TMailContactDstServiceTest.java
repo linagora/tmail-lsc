@@ -4,7 +4,6 @@ import static io.restassured.RestAssured.with;
 import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.config.RestAssuredConfig.newConfig;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.hamcrest.Matchers.hasSize;
 import static org.lsc.plugins.connectors.james.TMailContactDstService.EMAIL_KEY;
@@ -23,8 +22,6 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
-
-import javax.ws.rs.NotFoundException;
 
 import org.apache.http.HttpStatus;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -289,36 +286,6 @@ class TMailContactDstServiceTest {
         // Wait for webadmin fix support partial update
         assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress())).isEqualTo(new Contact(CONTACT_RENE.getEmailAddress(),
             CONTACT_RENE.getFirstname(), Optional.of("Surname")));
-    }
-
-    @Test
-    void deleteShouldRemoveWhenTheContactExists() throws Exception {
-        createContact(CONTACT_RENE);
-
-        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
-        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
-        modifications.setLscAttributeModifications(ImmutableList.of());
-
-        boolean applied = testee.apply(modifications);
-
-        assertThat(applied).isTrue();
-        // Wait for webadmin fix return 404 instead 200
-        assertThatThrownBy(() -> jamesDao.getContact(CONTACT_RENE.getEmailAddress()))
-            .isInstanceOf(NotFoundException.class);
-    }
-
-    @Test
-    void deleteShouldSucceedWhenTheContactDoesNotExist() throws Exception {
-        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
-        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
-        modifications.setLscAttributeModifications(ImmutableList.of());
-
-        boolean applied = testee.apply(modifications);
-
-        assertThat(applied).isTrue();
-        // Wait for webadmin fix return 404 instead 200
-        assertThatThrownBy(() -> jamesDao.getContact(CONTACT_RENE.getEmailAddress()))
-            .isInstanceOf(NotFoundException.class);
     }
 
     @Test

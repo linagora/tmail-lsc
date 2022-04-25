@@ -76,11 +76,9 @@ public class TMailContactDstService implements IWritableService {
                     } else {
                         return false;
                     }
-                case DELETE_OBJECT:
-                    return jamesDao.removeDomainContact(extractContact(lscModifications).getEmailAddress());
                 default:
                     LOGGER.debug("{} operation, ignored.", lscModifications.getOperation());
-                    return true;
+                    return false;
             }
         } catch (ProcessingException | JsonProcessingException exception) {
             LOGGER.error(String.format("ProcessingException while writing (%s)", exception));

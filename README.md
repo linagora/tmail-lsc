@@ -97,7 +97,7 @@ The pivot used for the synchronization in LSC connector is email address. For th
 
 ### Domain contact Synchronization
 
-For example, it can be used to synchronize the domain contact stored in the LDAP of an OBM instance to the TMail Server(s) of a TMail deployment.
+For example, it can be used to synchronize the domain contact stored in a LDAP instance to the TMail Server(s) of a TMail deployment in order to empower auto-complete.
 
 #### Architecture
 Given the following LDAP entries:
