@@ -95,6 +95,53 @@ $ curl -XGET http://ip:port/users
 
 The pivot used for the synchronization in LSC connector is email address. For this case, `james-user@james.org` is stored in `email` attribute.
 
+### Domain contact Synchronization
+
+For example, it can be used to synchronize the domain contact stored in a LDAP instance to the TMail Server(s) of a TMail deployment in order to empower auto-complete.
+
+#### Architecture
+Given the following LDAP entries:
+
+```
+dn: uid=renecordier, ou=people, dc=james,dc=org
+mail: renecordier@james.org
+givenName: Rene
+sn: Cordier
+[...]
+
+dn: uid=tungtranvan, ou=people, dc=james,dc=org
+mail: tungtranvan@james.org
+givenName: Tung
+sn: Tran Van
+[...]
+```
+
+This will be represented as the following TMail domain contacts:
+
+```bash
+$ curl -XGET http://ip:port/domains/contacts
+
+["renecordier@james.org", "tungtranvan@james.org"]
+```
+
+Second contact (tungtranvan@james.org) details:
+```bash
+$ curl -XGET http://ip:port/domains/james.org/contacts/tungtranvan
+
+{
+    "id": "2",
+    "emailAddress": "tungtranvan@james.org",
+    "firstname": "Tung",
+    "surname": "Tran Van"
+}
+```
+
+LDAP entries's `givenName` and `sn` are Optional.
+
+The pivot used for the synchronization in the LSC connector is the email address, here `tungtranvan@james.org` stored in the `email` attribute.
+
+The destination attributes for the LSC aliases connector are named `firstname` and `surname`.
+
 ### Configuration
 
 The plugin connection needs a JWT token to connect to TMail. To configure this JWT token, set the `password` field of the plugin connection as the JWT token you want to use.
