@@ -346,7 +346,7 @@ public class JamesDao {
 		String rawResponseBody = response.readEntity(String.class);
 		response.close();
 		if (checkResponse(response)) {
-			LOGGER.debug("Create domain contact {} is successful", contact.getEmailAddress());
+			LOGGER.debug("Update domain contact {} is successful", contact.getEmailAddress());
 			return true;
 		} else {
 			LOGGER.error(String.format("Error %d (%s - %s) while creating domain contact: %s",
