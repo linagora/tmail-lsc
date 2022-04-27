@@ -20,6 +20,7 @@ import org.lsc.exception.LscServiceConfigurationException;
 import org.lsc.exception.LscServiceException;
 import org.lsc.plugins.connectors.james.beans.Contact;
 import org.lsc.plugins.connectors.james.beans.User;
+import org.lsc.plugins.connectors.james.config.SyncContactConfig;
 import org.lsc.plugins.connectors.james.generated.JamesService;
 import org.lsc.plugins.connectors.james.generated.TMailContactService;
 import org.lsc.service.IWritableService;
@@ -62,27 +63,32 @@ public class TMailContactDstService implements IWritableService {
             LOGGER.error("MainIdentifier is needed to update");
             return false;
         }
-        User user = new User(lscModifications.getMainIdentifier());
-        LOGGER.debug("User: {}, Operation: {}", user.email, lscModifications.getOperation());
+        String email = lscModifications.getMainIdentifier();
+        if (!SyncContactConfig.DOMAIN_LIST_TO_SYNCHRONIZE.isPresent() || SyncContactConfig.DOMAIN_LIST_TO_SYNCHRONIZE.get().contains(Contact.extractDomainFromEmail(email))) {
+            LOGGER.debug("User: {}, Operation: {}", email, lscModifications.getOperation());
 
-        try {
-            switch (lscModifications.getOperation()) {
-                case CREATE_OBJECT:
-                    return jamesDao.addDomainContact(extractContact(lscModifications));
-                case UPDATE_OBJECT:
-                    Contact updateContact = extractContact(lscModifications);
-                    if (updateContact.getFirstname().isPresent() || updateContact.getSurname().isPresent()) {
-                        return jamesDao.updateDomainContact(extractContact(lscModifications));
-                    } else {
+            try {
+                switch (lscModifications.getOperation()) {
+                    case CREATE_OBJECT:
+                        return jamesDao.addDomainContact(extractContact(lscModifications));
+                    case UPDATE_OBJECT:
+                        Contact updateContact = extractContact(lscModifications);
+                        if (updateContact.getFirstname().isPresent() || updateContact.getSurname().isPresent()) {
+                            return jamesDao.updateDomainContact(extractContact(lscModifications));
+                        } else {
+                            return false;
+                        }
+                    default:
+                        LOGGER.debug("{} operation, ignored.", lscModifications.getOperation());
                         return false;
-                    }
-                default:
-                    LOGGER.debug("{} operation, ignored.", lscModifications.getOperation());
-                    return false;
+                }
+            } catch (ProcessingException | JsonProcessingException exception) {
+                LOGGER.error(String.format("ProcessingException while writing (%s)", exception));
+                LOGGER.debug(exception.toString(), exception);
+                return false;
             }
-        } catch (ProcessingException | JsonProcessingException exception) {
-            LOGGER.error(String.format("ProcessingException while writing (%s)", exception));
-            LOGGER.debug(exception.toString(), exception);
+        } else {
+            LOGGER.debug("Not wished synchronize domain: " + Contact.extractDomainFromEmail(email));
             return false;
         }
     }
@@ -104,8 +110,13 @@ public class TMailContactDstService implements IWritableService {
             return null;
         }
         try {
-            Contact contact = jamesDao.getContact(email);
-            return contactToBean(contact);
+            if (!SyncContactConfig.DOMAIN_LIST_TO_SYNCHRONIZE.isPresent() || SyncContactConfig.DOMAIN_LIST_TO_SYNCHRONIZE.get().contains(Contact.extractDomainFromEmail(email))) {
+                Contact contact = jamesDao.getContact(email);
+                return contactToBean(contact);
+            } else {
+                LOGGER.debug("Not wished synchronize domain: " + Contact.extractDomainFromEmail(email));
+                return null;
+            }
         } catch (ProcessingException e) {
             LOGGER.error(String.format("ProcessingException while getting bean %s/%s (%s)",
                 pivotName, email, e));

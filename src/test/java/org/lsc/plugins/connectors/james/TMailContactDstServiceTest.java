@@ -13,13 +13,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.FileReader;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.Security;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -40,6 +44,7 @@ import org.lsc.configuration.PluginDestinationServiceType;
 import org.lsc.configuration.ServiceType.Connection;
 import org.lsc.configuration.TaskType;
 import org.lsc.plugins.connectors.james.beans.Contact;
+import org.lsc.plugins.connectors.james.config.SyncContactConfig;
 import org.lsc.plugins.connectors.james.generated.TMailContactService;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
@@ -57,6 +62,7 @@ import io.restassured.http.ContentType;
 class TMailContactDstServiceTest {
     public static final String GET_ALL_CONTACT_PATH = "/domains/contacts/all";
     public static final String DOMAIN = "james.org";
+    public static final String UN_WISHED_SYNCHRONIZE_DOMAIN = "unwisheddomain.org";
     private static final URL PRIVATE_KEY = ClassLoader.getSystemResource("conf/jwt_privatekey");
     private static final URL PUBLIC_KEY = ClassLoader.getSystemResource("conf/jwt_publickey");
     private static final int JAMES_WEBADMIN_PORT = 8000;
@@ -66,6 +72,7 @@ class TMailContactDstServiceTest {
     private static final Contact CONTACT_TUNG = new Contact("tungtranvan@james.org", Optional.of("Tung"), Optional.of("Tran Van"));
     private static final Contact CONTACT_WITHOUT_NAMES = new Contact("nonnames@james.org", Optional.empty(), Optional.empty());
     private static final Contact CONTACT_WITH_NAMES = new Contact("nonnames@james.org", Optional.of("Firstname"), Optional.of("Surname"));
+    private static final Contact CONTACT_WITH_UN_WISHED_DOMAIN = new Contact("nonnames@unwisheddomain.org", Optional.empty(), Optional.empty());
 
     private static GenericContainer<?> james;
     private static TMailContactDstService testee;
@@ -106,6 +113,7 @@ class TMailContactDstServiceTest {
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
 
         with().basePath("/domains").put(DOMAIN).then().statusCode(HttpStatus.SC_NO_CONTENT);
+        with().basePath("/domains").put(UN_WISHED_SYNCHRONIZE_DOMAIN).then().statusCode(HttpStatus.SC_NO_CONTENT);
         jamesDao = new JamesDao("http://localhost:" + MAPPED_JAMES_WEBADMIN_PORT, jwtToken(), task);
     }
 
@@ -226,6 +234,18 @@ class TMailContactDstServiceTest {
     }
 
     @Test
+    void createContactWithUnWishedDomainShouldFail() throws Exception {
+        forceSynchronizeDomainListValue(Arrays.asList("james.org"));
+        LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress());
+        modifications.setLscAttributeModifications(ImmutableList.of());
+
+        boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isFalse();
+    }
+
+    @Test
     void updateWithMissingContactModificationShouldFail() throws Exception {
         createContact(CONTACT_RENE);
 
@@ -300,6 +320,14 @@ class TMailContactDstServiceTest {
     }
 
     @Test
+    void getBeanShouldReturnNullWhenUnWishedDomain() throws Exception {
+        forceSynchronizeDomainListValue(Arrays.asList("james.org"));
+        LscDatasets unWishedDomain = new LscDatasets(ImmutableMap.of("email", CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress()));
+
+        assertThat(testee.getBean("email", unWishedDomain, FROM_SAME_SERVICE)).isNull();
+    }
+
+    @Test
     void getBeanShouldNotReturnNullWhenContactExists() throws Exception {
         createContact(CONTACT_RENE);
 
@@ -336,5 +364,15 @@ class TMailContactDstServiceTest {
     private void createContact(Contact contact) throws JsonProcessingException {
         boolean isCreatedSucceed = jamesDao.addDomainContact(contact);
         assertThat(isCreatedSucceed).isTrue();
+    }
+
+    // using reflection to change DOMAIN_LIST_TO_SYNCHRONIZE value
+    private static void forceSynchronizeDomainListValue(List<String> domainList) throws NoSuchFieldException, IllegalAccessException {
+        final Field field = SyncContactConfig.class.getDeclaredField("DOMAIN_LIST_TO_SYNCHRONIZE");
+        field.setAccessible(true);
+        final Field modifiersField = Field.class.getDeclaredField("modifiers");
+        modifiersField.setAccessible(true);
+        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+        field.set(null, Optional.of(domainList));
     }
 }
