@@ -311,7 +311,7 @@ public class JamesDao {
 	}
 
 	public List<User> getUsersListViaDomainContacts() {
-		WebTarget target = contactsClient.path("/domains/contacts");
+		WebTarget target = contactsClient.path("/domains/contacts/all");
 		LOGGER.debug("GETting users with domain contacts list: " + target.getUri().toString());
 		List<String> users = target.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)

@@ -55,7 +55,7 @@ import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
 
 class TMailContactDstServiceTest {
-    public static final String GET_ALL_CONTACT_PATH = "/domains/contacts";
+    public static final String GET_ALL_CONTACT_PATH = "/domains/contacts/all";
     public static final String DOMAIN = "james.org";
     private static final URL PRIVATE_KEY = ClassLoader.getSystemResource("conf/jwt_privatekey");
     private static final URL PUBLIC_KEY = ClassLoader.getSystemResource("conf/jwt_publickey");
@@ -73,7 +73,7 @@ class TMailContactDstServiceTest {
 
     @BeforeAll
     static void setup() throws Exception {
-        james = new GenericContainer<>("quanth99/tmail:memory-contact-routes");
+        james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
         String webadmin = ClassLoader.getSystemResource("conf/webadmin.properties").getFile();
         james.withExposedPorts(JAMES_WEBADMIN_PORT)
             .withFileSystemBind(PUBLIC_KEY.getFile(), "/root/conf/jwt_publickey", BindMode.READ_ONLY)
@@ -283,7 +283,6 @@ class TMailContactDstServiceTest {
         boolean applied = testee.apply(modifications);
 
         assertThat(applied).isTrue();
-        // Wait for webadmin fix support partial update
         assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress())).isEqualTo(new Contact(CONTACT_RENE.getEmailAddress(),
             CONTACT_RENE.getFirstname(), Optional.of("Surname")));
     }
@@ -297,7 +296,6 @@ class TMailContactDstServiceTest {
     void getBeanShouldReturnNullWhenNoMatchingContact() throws Exception {
         LscDatasets nonExistingIdDataset = new LscDatasets(ImmutableMap.of("email", "nonExistingEmail@james.org"));
 
-        // Wait for webadmin fix return 404 instead 200
         assertThat(testee.getBean("email", nonExistingIdDataset, FROM_SAME_SERVICE)).isNull();
     }
 
