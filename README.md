@@ -167,7 +167,10 @@ The values to configure are:
 The domains used in the aliases must have been previously created in TMail.
 Otherwise, if a user have a single alias pointing to an unknown domain, none of her aliases will be added.
 
-The jar of the TMail LSC plugin must be copied in the `lib` directory of your LSC installation.
+For the domain synchronization, you can specify the wished domain list to be synchronized by specify the dedicated ENV variable with key `DOMAIN_LIST_TO_SYNCHRONIZE` and DELIMITER `,`.
+If you omit this environment variable setting, all domains contact will be synchronized from LDAP.
+
+The jar of the TMail LSC plugin (`target/lsc-tmail-plugin-1.0-distribution.jar`) must be copied in the `lib` directory of your LSC installation.
 Then you can launch it with the following command line:
 
 ```bash

@@ -50,8 +50,8 @@
           <name>tmail-contact-service-dst</name>
           <connection reference="james" />
           <james:writableAttributes>
-            <string>givenName</string>
-            <string>sn</string>
+            <string>firstname</string>
+            <string>surname</string>
           </james:writableAttributes>
         </james:tmailContactService>
       </pluginDestinationService>
