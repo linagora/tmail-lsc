@@ -46,8 +46,8 @@ import org.lsc.configuration.TaskType;
 import org.lsc.plugins.connectors.james.beans.Contact;
 import org.lsc.plugins.connectors.james.config.SyncContactConfig;
 import org.lsc.plugins.connectors.james.generated.TMailContactService;
-import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.utility.MountableFile;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
@@ -81,11 +81,10 @@ class TMailContactDstServiceTest {
     @BeforeAll
     static void setup() throws Exception {
         james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
-        String webadmin = ClassLoader.getSystemResource("conf/webadmin.properties").getFile();
+        james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_publickey"), "/root/conf/");
+        james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_privatekey"), "/root/conf/");
+        james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/webadmin.properties"), "/root/conf/");
         james.withExposedPorts(JAMES_WEBADMIN_PORT)
-            .withFileSystemBind(PUBLIC_KEY.getFile(), "/root/conf/jwt_publickey", BindMode.READ_ONLY)
-            .withFileSystemBind(PRIVATE_KEY.getFile(), "/root/conf/jwt_privatekey", BindMode.READ_ONLY)
-            .withFileSystemBind(webadmin, "/root/conf/webadmin.properties", BindMode.READ_ONLY)
             .start();
 
         int MAPPED_JAMES_WEBADMIN_PORT = james.getMappedPort(JAMES_WEBADMIN_PORT);
