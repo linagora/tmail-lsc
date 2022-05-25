@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+      label 'jdk11'
+    }
     stages {
         stage('Compile') {
             steps {
