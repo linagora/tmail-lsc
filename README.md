@@ -181,4 +181,17 @@ If don't want to delete dangling data, run this command without `--clean all` pa
 
 ### Packaging
 
-WIP
+We provide autonomously Docker image building thanks to Maven plugins. You need to run `mvn clean install` to build the image `linagora/tmail-lsc:latest`.
+
+To use this image, please mount the appropriate LSC configuration files to container's `/opt/lsc/conf` directory. 
+
+E.g:
+```bash
+docker run -it -v ${PWD}/sample/ldap-to-tmail-contact/logback.xml:/opt/lsc/conf/logback.xml -v ${PWD}/sample/ldap-to-tmail-contact/lsc.xml:/opt/lsc/conf/lsc.xml linagora/tmail-lsc:latest
+```
+
+Then run this command inside the container to run synchronization tasks:
+
+```bash
+JAVA_OPTS=$JAVA_OPTS ./lsc --config $CONF_DIR --synchronize all --threads 1
+```

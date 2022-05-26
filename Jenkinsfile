@@ -19,5 +19,21 @@ pipeline {
                 }
             }
         }
+        stage('Deliver Docker image') {
+            when {
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                }
+            }
+            steps {
+                script {
+                    def lscImage = docker.image "linagora/tmail-lsc:latest"
+                    docker.withRegistry('', 'dockerHub') {
+                        lscImage.push()
+                    }
+                }
+            }
+        }
     }
 }
