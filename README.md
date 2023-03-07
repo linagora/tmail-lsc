@@ -142,6 +142,43 @@ The pivot used for the synchronization in the LSC connector is the email address
 
 The destination attributes for the LSC aliases connector are named `firstname` and `surname`.
 
+### JMAP Identity provisioning
+
+For example, it can be used to provision default JMAP identity for users that leverages the names stored in an LDAP instance to the TMail Server(s) of a TMail deployment.
+
+#### Architecture
+Given the following LDAP entries:
+
+```
+dn: uid=tungtranvan, ou=people, dc=james,dc=org
+mail: tungtranvan@james.org
+givenName: Tung
+sn: Tran Van
+[...]
+```
+
+After running this identity synchronization job, a default identity will be created for the user:
+
+```bash
+$ curl -XGET http://ip:port/users/tungtranvan@james.org/identities?default=true
+
+[{
+	"name": "Tung Tran Van",
+	"email": "tungtranvan@james.org",
+	"id": "4c039533-75b9-45db-becc-01fb0e747aa8",
+	"mayDelete": true,
+	"textSignature": "",
+	"htmlSignature": "",
+	"sortOrder": 0,
+	"bcc": [],
+	"replyTo": []
+}]
+```
+
+The pivot used for the synchronization in the LSC connector is the email address, here `tungtranvan@james.org` that stored in the `email` attribute.
+
+The destination attributes for the LSC aliases connector are named `firstname` and `surname`.
+
 ### Configuration
 
 The plugin connection needs a JWT token to connect to TMail. To configure this JWT token, set the `password` field of the plugin connection as the JWT token you want to use.
