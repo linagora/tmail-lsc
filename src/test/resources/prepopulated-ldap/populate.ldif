@@ -25,3 +25,12 @@ sn: aliceSurname
 mail: alice@james.org
 userPassword: alicepassword
 description: alice
+
+dn: uid=missingFirstname, ou=people, dc=james,dc=org
+objectClass: inetOrgPerson
+uid: missingFirstname
+cn: missingFirstnameCommonName
+sn: missingFirstname_surname
+mail: missingFirstname@james.org
+userPassword: password
+description: missingFirstnameUser

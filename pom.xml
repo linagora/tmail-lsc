@@ -357,6 +357,12 @@
 			<version>2.2.12</version>
 			<scope>compile</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<version>4.2.0</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 </project>
