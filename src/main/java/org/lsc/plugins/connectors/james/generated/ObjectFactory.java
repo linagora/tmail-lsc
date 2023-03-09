@@ -45,6 +45,14 @@ public class ObjectFactory {
     }
 
     /**
+     * Create an instance of {@link JamesIdentityService }
+     *
+     */
+    public JamesIdentityService createJamesIdentityService() {
+        return new JamesIdentityService();
+    }
+
+    /**
      * Create an instance of {@link JamesUsersService }
      *
      */

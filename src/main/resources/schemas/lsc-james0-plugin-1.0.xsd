@@ -23,6 +23,13 @@
 			</xsd:complexContent>
 		</xsd:complexType>
 	</xsd:element>
+	<xsd:element name="jamesIdentityService">
+		<xsd:complexType>
+			<xsd:complexContent>
+				<xsd:extension base="jamesService" />
+			</xsd:complexContent>
+		</xsd:complexType>
+	</xsd:element>
 	<xsd:element name="jamesUsersService">
 		<xsd:complexType>
 			<xsd:complexContent>

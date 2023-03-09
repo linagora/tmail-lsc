@@ -60,6 +60,7 @@ import org.glassfish.jersey.jackson.JacksonFeature;
 import org.lsc.configuration.TaskType;
 import org.lsc.plugins.connectors.james.beans.Alias;
 import org.lsc.plugins.connectors.james.beans.Contact;
+import org.lsc.plugins.connectors.james.beans.Identity;
 import org.lsc.plugins.connectors.james.beans.User;
 import org.lsc.plugins.connectors.james.beans.UserDto;
 import org.slf4j.Logger;
@@ -72,6 +73,7 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 public class JamesDao {
 	
 	public static final String ALIASES_PATH = "/address/aliases"; 
+	public static final String IDENTITIES_PATH = "/users/%s/identities";
 	public static final String USERS_PATH = "/users";
 	public static final String DOMAIN_CONTACT_PATH = "/domains/%s/contacts/%s";
 	public static final int HTTP_STATUS_CODE_USER_EXITS = Status.OK.getStatusCode();
@@ -80,6 +82,7 @@ public class JamesDao {
 	protected static final Logger LOGGER = LoggerFactory.getLogger(JamesDao.class);
 
 	private final WebTarget aliasesClient;
+	private final WebTarget identitiesClient;
 	private final WebTarget usersClient;
 	private final WebTarget contactsClient;
 	private final String authorizationBearer;
@@ -91,6 +94,10 @@ public class JamesDao {
 				.register(JacksonFeature.class)
 				.target(url)
 				.path(ALIASES_PATH);
+
+		identitiesClient = ClientBuilder.newClient()
+			.register(JacksonFeature.class)
+			.target(url);
 
 		usersClient = ClientBuilder.newClient()
 			.register(JacksonFeature.class)
@@ -114,6 +121,42 @@ public class JamesDao {
 			throw new NotFoundException();
 		}
 		return aliases;
+	}
+
+	public Identity getDefaultIdentity(String email) throws IOException {
+		WebTarget target = identitiesClient
+			.path(String.format(IDENTITIES_PATH, email))
+			.queryParam("default", true);
+		LOGGER.debug("GETting default identity for user {} at {}", email, target.getUri().toString());
+		List<Identity> identities = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.get(new GenericType<List<Identity>>(){});
+		if (identities.isEmpty()) {
+			throw new NotFoundException();
+		}
+		return identities.get(0);
+	}
+
+	public boolean createDefaultIdentity(Identity identity) throws JsonProcessingException {
+		Response response = identitiesClient
+			.path(String.format(IDENTITIES_PATH, identity.getEmail()))
+			.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.post(Entity.text(mapper.writeValueAsString(identity)));
+
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+		if (checkResponse(response)) {
+			LOGGER.debug("Create default identity for user {} successfully with display name {}", identity.getEmail(), identity.getName());
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while creating default identity at %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				identitiesClient.getUri().toString()));
+			return false;
+		}
 	}
 
 	public List<User> getUsersListViaAlias() {
