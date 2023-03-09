@@ -86,7 +86,7 @@ class IdentitySynchronizationIntegrationTest {
     }
 
     private GenericContainer<?> createJamesContainer(Network network) {
-        GenericContainer<?> james = new GenericContainer<>("quanth99/tmail-backend-memory:lsc-identity-2")
+        GenericContainer<?> james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master")
             .withNetworkAliases("james")
             .withNetwork(network)
             .withExposedPorts(JAMES_WEBADMIN_PORT);

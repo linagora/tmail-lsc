@@ -67,7 +67,7 @@ class JamesIdentityDstServiceTest {
 
     @BeforeEach
     void setup() throws Exception {
-        james = new GenericContainer<>("quanth99/tmail-backend-memory:lsc-identity-2");
+        james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
         james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_publickey"), "/root/conf/");
         james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_privatekey"), "/root/conf/");
         james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/webadmin.properties"), "/root/conf/");
