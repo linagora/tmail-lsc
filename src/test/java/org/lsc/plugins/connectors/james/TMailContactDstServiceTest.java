@@ -58,6 +58,7 @@ import com.google.common.collect.ImmutableMap;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
+import sun.misc.Unsafe;
 
 class TMailContactDstServiceTest {
     public static final String GET_ALL_CONTACT_PATH = "/domains/contacts/all";
@@ -367,11 +368,14 @@ class TMailContactDstServiceTest {
 
     // using reflection to change DOMAIN_LIST_TO_SYNCHRONIZE value
     private static void forceSynchronizeDomainListValue(List<String> domainList) throws NoSuchFieldException, IllegalAccessException {
+        final Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        final Unsafe unsafe = (Unsafe) unsafeField.get(null);
+
         final Field field = SyncContactConfig.class.getDeclaredField("DOMAIN_LIST_TO_SYNCHRONIZE");
-        field.setAccessible(true);
-        final Field modifiersField = Field.class.getDeclaredField("modifiers");
-        modifiersField.setAccessible(true);
-        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-        field.set(null, Optional.of(domainList));
+        final Object staticFieldBase = unsafe.staticFieldBase(field);
+        final long staticFieldOffset = unsafe.staticFieldOffset(field);
+
+        unsafe.putObject(staticFieldBase, staticFieldOffset, Optional.of(domainList));
     }
 }
