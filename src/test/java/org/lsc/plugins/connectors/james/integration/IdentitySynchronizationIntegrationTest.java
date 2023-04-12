@@ -3,6 +3,7 @@ package org.lsc.plugins.connectors.james.integration;
 import static io.restassured.RestAssured.given;
 import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.config.RestAssuredConfig.newConfig;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.core.Is.is;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.utility.MountableFile;
 
@@ -82,7 +84,9 @@ class IdentitySynchronizationIntegrationTest {
     void tearDown() {
         jamesContainer.close();
         ldapContainer.close();
-        lscContainer.close();
+        if (lscContainer.isRunning()) {
+            lscContainer.close();
+        }
     }
 
     private GenericContainer<?> createJamesContainer(Network network) {
@@ -107,18 +111,21 @@ class IdentitySynchronizationIntegrationTest {
             .withEnv("SLAPD_PASSWORD", "mysecretpassword")
             .withEnv("SLAPD_CONFIG_PASSWORD", "mysecretpassword")
             .withCreateContainerCmdModifier(createContainerCmd -> createContainerCmd.withName("team-mail-openldap-testing" + UUID.randomUUID()))
-            .withExposedPorts(LDAP_PORT);
+            .withExposedPorts(LDAP_PORT)
+            .waitingFor(new LogMessageWaitStrategy().withRegEx(".*slapd starting*\\n")
+            .withTimes(1)
+            .withStartupTimeout(Duration.ofMinutes(3)));
     }
 
     private GenericContainer<?> createLscContainer(Network network) {
-        GenericContainer<?> lsc = new GenericContainer<>("linagora/tmail-lsc:latest")
+        return new GenericContainer<>("linagora/tmail-lsc:latest")
             .withNetworkAliases("lsc")
             .withNetwork(network)
-            .withStartupTimeout(Duration.ofMinutes(1))
-            .withCommand("./lsc JAVA_OPTS=\"-DLSC.PLUGINS.PACKAGEPATH=org.lsc.plugins.connectors.james.generated\" --config /opt/lsc/conf/ --synchronize all --threads 1");
-        lsc.withCopyFileToContainer(MountableFile.forClasspathResource("lsc-conf/logback.xml"), "/opt/lsc/conf/");
-        lsc.withCopyFileToContainer(MountableFile.forClasspathResource("lsc-conf/identity/lsc.xml"), "/opt/lsc/conf/");
-        return lsc;
+            .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withMemory(512000000L))
+            .withCommand("./lsc JAVA_OPTS=\"-DLSC.PLUGINS.PACKAGEPATH=org.lsc.plugins.connectors.james.generated\" --config /opt/lsc/conf/ --synchronize all --threads 1")
+            .withCopyFileToContainer(MountableFile.forClasspathResource("lsc-conf/logback.xml"), "/opt/lsc/conf/")
+            .withCopyFileToContainer(MountableFile.forClasspathResource("lsc-conf/identity/lsc.xml"), "/opt/lsc/conf/")
+            .withCreateContainerCmdModifier(createContainerCmd -> createContainerCmd.withName("tmail-lsc-testing" + UUID.randomUUID()));
     }
 
     private String jwtToken() throws Exception {
@@ -160,27 +167,39 @@ class IdentitySynchronizationIntegrationTest {
             .statusCode(HttpStatus.SC_CREATED);
     }
 
+    private void runLscContainer() {
+        lscContainer
+            .waitingFor(new LogMessageWaitStrategy().withRegEx(".*successfully modified entries:.*\\n")
+                .withTimes(1)
+                .withStartupTimeout(Duration.ofMinutes(2)))
+            .start();
+    }
+
     @Test
     void lscJobShouldCreateDefaultIdentity() {
         // GIVEN BOB and ALICE entries in LDAP, while they have no default identity on James yet
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN BOB and ALICE should have default identity provisioned
         await.untilAsserted(() -> {
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", BOB))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", is("bobFirstname bobSurname"));
+            assertThatCode(() -> {
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", BOB))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", is("bobFirstname bobSurname"));
 
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", ALICE))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", is("aliceFirstname aliceSurname"));
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", ALICE))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", is("aliceFirstname aliceSurname"));
+            }).doesNotThrowAnyException();
         });
+
+        System.out.println(123);
     }
 
     @Test
@@ -196,15 +215,16 @@ class IdentitySynchronizationIntegrationTest {
             .body("", hasSize(2));
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN LSC job should not create new identity for BOB
         await.untilAsserted(() ->
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities", BOB))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("", hasSize(2)));
+            assertThatCode(() ->
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities", BOB))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("", hasSize(2))).doesNotThrowAnyException());
     }
 
     @Test
@@ -213,16 +233,17 @@ class IdentitySynchronizationIntegrationTest {
         createUserIdentity(BOB, "BOB original display name");
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN BOB 's default identity should not be overridden by the LSC job
         await.untilAsserted(() ->
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", BOB))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", not("bobFirstname bobSurname"))
-                .body("[0].name", is("BOB original display name")));
+            assertThatCode(() ->
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", BOB))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", not("bobFirstname bobSurname"))
+                    .body("[0].name", is("BOB original display name"))).doesNotThrowAnyException());
     }
 
     @Test
@@ -231,22 +252,24 @@ class IdentitySynchronizationIntegrationTest {
         createUserIdentity(BOB, "BOB original display name");
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN BOB default identity should not be overridden, while ALICE default identity should be created
         await.untilAsserted(() -> {
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", BOB))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", not("bobFirstname bobSurname"))
-                .body("[0].name", is("BOB original display name"));
+            assertThatCode(() -> {
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", BOB))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", not("bobFirstname bobSurname"))
+                    .body("[0].name", is("BOB original display name"));
 
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", ALICE))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", is("aliceFirstname aliceSurname"));
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", ALICE))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", is("aliceFirstname aliceSurname"));
+            }).doesNotThrowAnyException();
         });
     }
 
@@ -256,15 +279,16 @@ class IdentitySynchronizationIntegrationTest {
         createUserIdentity(ONLY_EXISTING_IN_JAMES_USER, "default display name");
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN LSC job should not delete the default identity of the user
         await.untilAsserted(() ->
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", ONLY_EXISTING_IN_JAMES_USER))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", is("default display name")));
+            assertThatCode(() ->
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", ONLY_EXISTING_IN_JAMES_USER))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", is("default display name"))).doesNotThrowAnyException());
 
     }
 
@@ -273,15 +297,16 @@ class IdentitySynchronizationIntegrationTest {
         // GIVEN ONLY_EXISTING_IN_JAMES_USER only exists in James but not in LDAP
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN LSC job should not create the default identity for the user
         await.untilAsserted(() ->
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", ONLY_EXISTING_IN_JAMES_USER))
-            .then()
-                .statusCode(HttpStatus.SC_NOT_FOUND)
-                .body("message", is("Default identity can not be found")));
+            assertThatCode(() ->
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", ONLY_EXISTING_IN_JAMES_USER))
+                .then()
+                    .statusCode(HttpStatus.SC_NOT_FOUND)
+                    .body("message", is("Default identity can not be found"))).doesNotThrowAnyException());
     }
 
     @Test
@@ -289,14 +314,15 @@ class IdentitySynchronizationIntegrationTest {
         // GIVEN MISSING_FIRSTNAME_USER entry in LDAP which does not have `givenName` attribute
 
         // RUN the LSC identity job
-        lscContainer.start();
+        runLscContainer();
 
         // THEN LSC job should set surname as identity display name
         await.untilAsserted(() ->
-            given(requestSpecification)
-                .get(String.format("/users/%s/identities?default=true", MISSING_FIRSTNAME_USER))
-            .then()
-                .statusCode(HttpStatus.SC_OK)
-                .body("[0].name", is("missingFirstname_surname")));
+            assertThatCode(() ->
+                given(requestSpecification)
+                    .get(String.format("/users/%s/identities?default=true", MISSING_FIRSTNAME_USER))
+                .then()
+                    .statusCode(HttpStatus.SC_OK)
+                    .body("[0].name", is("missingFirstname_surname"))).doesNotThrowAnyException());
     }
 }
