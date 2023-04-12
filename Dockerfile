@@ -1,4 +1,4 @@
-FROM eclipse-temurin:8-jre
+FROM eclipse-temurin:20-jre-jammy
 
 ADD /lsc-2.1.6 /opt/lsc
 RUN mkdir /opt/lsc/conf
