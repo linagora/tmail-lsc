@@ -11,7 +11,7 @@ pipeline {
         stage('Test') {
             steps {
                 sh 'docker pull linagora/tmail-backend:memory-branch-master'
-                sh 'mvn -B surefire:test'
+                sh 'mvn -B surefire:test -T1C'
             }
             post {
                 always {
