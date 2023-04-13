@@ -158,7 +158,8 @@ class TMailContactDstServiceTest {
     @Test
     void getAllContactShouldReturnEmptyByDefault() {
         with()
-            .get(GET_ALL_CONTACT_PATH)
+            .basePath(GET_ALL_CONTACT_PATH)
+            .get()
         .then()
             .statusCode(HttpStatus.SC_OK)
             .body("", hasSize(0));
