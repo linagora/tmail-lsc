@@ -60,6 +60,7 @@ import org.glassfish.jersey.jackson.JacksonFeature;
 import org.lsc.configuration.TaskType;
 import org.lsc.plugins.connectors.james.beans.Alias;
 import org.lsc.plugins.connectors.james.beans.Contact;
+import org.lsc.plugins.connectors.james.beans.Forward;
 import org.lsc.plugins.connectors.james.beans.Identity;
 import org.lsc.plugins.connectors.james.beans.User;
 import org.lsc.plugins.connectors.james.beans.UserDto;
@@ -72,7 +73,8 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 public class JamesDao {
 	
-	public static final String ALIASES_PATH = "/address/aliases"; 
+	public static final String ALIASES_PATH = "/address/aliases";
+	public static final String FORWARDS_PATH = "/address/forwards";
 	public static final String IDENTITIES_PATH = "/users/%s/identities";
 	public static final String USERS_PATH = "/users";
 	public static final String DOMAIN_CONTACT_PATH = "/domains/%s/contacts/%s";
@@ -82,6 +84,7 @@ public class JamesDao {
 	protected static final Logger LOGGER = LoggerFactory.getLogger(JamesDao.class);
 
 	private final WebTarget aliasesClient;
+	private final WebTarget forwardsClient;
 	private final WebTarget identitiesClient;
 	private final WebTarget usersClient;
 	private final WebTarget contactsClient;
@@ -94,6 +97,11 @@ public class JamesDao {
 				.register(JacksonFeature.class)
 				.target(url)
 				.path(ALIASES_PATH);
+
+		forwardsClient = ClientBuilder.newClient()
+			.register(JacksonFeature.class)
+			.target(url)
+			.path(FORWARDS_PATH);
 
 		identitiesClient = ClientBuilder.newClient()
 			.register(JacksonFeature.class)
@@ -121,6 +129,95 @@ public class JamesDao {
 			throw new NotFoundException();
 		}
 		return aliases;
+	}
+
+	public List<Forward> getForwards(String email) {
+		WebTarget target = forwardsClient.path(email);
+		LOGGER.debug("GETting forwards: " + target.getUri().toString());
+		List<Forward> forwards = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.get(new GenericType<List<Forward>>(){});
+		if (forwards.isEmpty()) {
+			throw new NotFoundException();
+		}
+		return forwards;
+	}
+
+	public boolean createForwards(User user, List<Forward> forwardsToAdd) {
+		return forwardsToAdd.stream()
+			.reduce(true,
+				(result, forward) -> result && createForward(user, forward),
+				(result1, result2) -> result1 && result2);
+	}
+
+	private boolean createForward(User user, Forward forward) {
+		WebTarget target = forwardsClient.path(user.email)
+			.path("targets")
+			.path(forward.getMailAddress());
+
+		LOGGER.debug("Creating forward: " + target.getUri().toString());
+
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.put(Entity.text(""));
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+		if (checkResponse(response)) {
+			LOGGER.debug("Created forward {} for user {} successfully", forward.getMailAddress(), user.email);
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while creating forward: %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				target.getUri().toString()));
+			return false;
+		}
+	}
+
+	public boolean updateForwards(User user, List<Forward> ldapForwards) {
+		List<Forward> jamesForwards = getForwards(user.email);
+		List<Forward> forwardsToAddToJames = computeForwardsToAdd(ldapForwards, jamesForwards);
+		// Removing forwards is not supported. In case User has a forward that does not exist in LDAP, we should not remove that forward, that could be user JMAP forward.
+		return createForwards(user, forwardsToAddToJames);
+	}
+
+	private List<Forward> computeForwardsToAdd(List<Forward> ldapForwards, List<Forward> jamesForwards) {
+		return ldapForwards.stream()
+			.filter(forward -> !jamesForwards.contains(forward))
+			.collect(Collectors.toList());
+	}
+
+	public boolean deleteForwards(User user) {
+		List<Forward> forwardsToDelete = getForwards(user.email);
+		return deleteForwards(user, forwardsToDelete);
+	}
+	private boolean deleteForwards(User user, List<Forward> forwardsToDelete) {
+		return forwardsToDelete.stream()
+			.reduce(true,
+				(result, forward) -> result && deleteForward(user, forward),
+				(result1, result2) -> result1 && result2);
+	}
+
+	private boolean deleteForward(User user, Forward forward) {
+		WebTarget target = forwardsClient.path(user.email).path("targets").path(forward.getMailAddress());
+		LOGGER.debug("DELETEting forward: " + target.getUri().toString());
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.delete();
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+		if (checkResponse(response)) {
+			LOGGER.debug("DELETE successfully");
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while deleting forward: %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				target.getUri().toString()));
+			return false;
+		}
 	}
 
 	public Identity getDefaultIdentity(String email) throws IOException {
@@ -165,6 +262,17 @@ public class JamesDao {
 		List<String> users = target.request()
 				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
 				.get(new GenericType<List<String>>(){});
+		return users.stream()
+			.map(User::new)
+			.collect(Collectors.toList());
+	}
+
+	public List<User> getUsersHaveForwards() {
+		WebTarget target = forwardsClient.path("");
+		LOGGER.debug("GETting users list that have forwards: " + target.getUri().toString());
+		List<String> users = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.get(new GenericType<List<String>>(){});
 		return users.stream()
 			.map(User::new)
 			.collect(Collectors.toList());

@@ -53,6 +53,14 @@ public class ObjectFactory {
     }
 
     /**
+     * Create an instance of {@link JamesForwardService }
+     *
+     */
+    public JamesForwardService createJamesForwardService() {
+        return new JamesForwardService();
+    }
+
+    /**
      * Create an instance of {@link JamesUsersService }
      *
      */
