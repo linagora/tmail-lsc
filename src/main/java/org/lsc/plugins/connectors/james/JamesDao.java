@@ -44,6 +44,7 @@ package org.lsc.plugins.connectors.james;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.ws.rs.HttpMethod;
@@ -58,6 +59,8 @@ import javax.ws.rs.core.Response.Status;
 
 import org.glassfish.jersey.jackson.JacksonFeature;
 import org.lsc.configuration.TaskType;
+import org.lsc.plugins.connectors.james.beans.AddressMapping;
+import org.lsc.plugins.connectors.james.beans.AddressMappingDto;
 import org.lsc.plugins.connectors.james.beans.Alias;
 import org.lsc.plugins.connectors.james.beans.Contact;
 import org.lsc.plugins.connectors.james.beans.Identity;
@@ -76,6 +79,8 @@ public class JamesDao {
 	public static final String IDENTITIES_PATH = "/users/%s/identities";
 	public static final String USERS_PATH = "/users";
 	public static final String DOMAIN_CONTACT_PATH = "/domains/%s/contacts/%s";
+	public static final String ADDRESS_MAPPING_PATH = "/mappings/address/%s/targets/%s";
+	public static final String USER_MAPPING_PATH = "/mappings/user";
 	public static final int HTTP_STATUS_CODE_USER_EXITS = Status.OK.getStatusCode();
 	public static final int HTTP_STATUS_CODE_USER_DOES_NOT_EXITS = Status.NOT_FOUND.getStatusCode();
 
@@ -85,6 +90,7 @@ public class JamesDao {
 	private final WebTarget identitiesClient;
 	private final WebTarget usersClient;
 	private final WebTarget contactsClient;
+	private final WebTarget addressMappingsClient;
 	private final String authorizationBearer;
 	private final ObjectMapper mapper;
 	
@@ -108,7 +114,118 @@ public class JamesDao {
 			.register(JacksonFeature.class)
 			.target(url);
 
+		addressMappingsClient = ClientBuilder.newClient()
+			.register(JacksonFeature.class)
+			.target(url);
+
 		mapper = new ObjectMapper().registerModule(new Jdk8Module());
+	}
+
+	public List<AddressMapping> getAddressMappings(String email) {
+		WebTarget target = addressMappingsClient.path(USER_MAPPING_PATH).path(email);
+		LOGGER.debug("GETting address mappings: " + target.getUri().toString());
+
+		List<AddressMapping> addressMappings = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.get(new GenericType<List<AddressMappingDto>>(){})
+			.stream()
+			.filter(filterAddressType())
+			.map(addressMappingDto -> new AddressMapping(addressMappingDto.getMapping()))
+			.collect(Collectors.toList());
+
+//		if (addressMappings.isEmpty()) {
+//			throw new NotFoundException();
+//		}
+		return addressMappings;
+	}
+
+	private Predicate<AddressMappingDto> filterAddressType() {
+		// AddressMapping create/delete APIs only work with "Address" type. IMO we only manage this type via LSC.
+		return addressMappingDto -> addressMappingDto.getType().equals("Address");
+	}
+
+	public boolean updateAddressMappings(User user, List<AddressMapping> ldapAddressMappings) {
+		List<AddressMapping> jamesAddressMappings = getAddressMappings(user.email);
+		List<AddressMapping> addressMappingsToAddToJames = computeAddressMappingsToAdd(ldapAddressMappings, jamesAddressMappings);
+		List<AddressMapping> addressMappingsToRemoveToJames = computeAddressMappingToRemove(ldapAddressMappings, jamesAddressMappings);
+		return createAddressMappings(user, addressMappingsToAddToJames) && removeAddressMappings(user, addressMappingsToRemoveToJames);
+	}
+
+	private List<AddressMapping> computeAddressMappingsToAdd(List<AddressMapping> ldapAddressMappings, List<AddressMapping> jamesAddressMappings) {
+		return ldapAddressMappings.stream()
+			.filter(addressMapping -> !jamesAddressMappings.contains(addressMapping))
+			.collect(Collectors.toList());
+	}
+
+	private List<AddressMapping> computeAddressMappingToRemove(List<AddressMapping> ldapAddressMappings, List<AddressMapping> jamesAddressMappings) {
+		return jamesAddressMappings.stream()
+			.filter(addressMapping -> !ldapAddressMappings.contains(addressMapping))
+			.collect(Collectors.toList());
+	}
+
+	private boolean createAddressMappings(User user, List<AddressMapping> addressMappingsToAdd) {
+		return addressMappingsToAdd.stream()
+			.reduce(true,
+				(result, addressMapping) -> result && createAddressMapping(user, addressMapping),
+				(result1, result2) -> result1 && result2);
+	}
+
+	private boolean createAddressMapping(User user, AddressMapping addressMapping) {
+		WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, addressMapping.getMapping()));
+
+		LOGGER.debug("Creating address mapping: " + target.getUri().toString());
+
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.post(Entity.text(""));
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+		if (checkResponse(response)) {
+			LOGGER.debug("Created address mapping {} for user {} successfully", addressMapping.getMapping(), user.email);
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while creating address mapping: %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				target.getUri().toString()));
+			return false;
+		}
+	}
+
+	public boolean removeAddressMappings(User user) {
+		List<AddressMapping> addressMappingsToRemove = getAddressMappings(user.email);
+		return removeAddressMappings(user, addressMappingsToRemove);
+	}
+
+	public boolean removeAddressMappings(User user, List<AddressMapping> addressMappingsToRemove) {
+		return addressMappingsToRemove.stream()
+			.reduce(true,
+				(result, addressMapping) -> result && removeAddressMapping(user, addressMapping),
+				(result1, result2) -> result1 && result2);
+	}
+
+	private boolean removeAddressMapping(User user, AddressMapping addressMapping) {
+		WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, addressMapping.getMapping()));
+
+		LOGGER.debug("DELETEting address mapping: " + target.getUri().toString());
+
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.delete();
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+		if (checkResponse(response)) {
+			LOGGER.debug("DELETE address mapping successfully");
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while deleting address mapping: %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				target.getUri().toString()));
+			return false;
+		}
 	}
 
 	public List<Alias> getAliases(String email) {

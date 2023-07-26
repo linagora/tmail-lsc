@@ -142,6 +142,48 @@ The pivot used for the synchronization in the LSC connector is the email address
 
 The destination attributes for the LSC aliases connector are named `firstname` and `surname`.
 
+### Address Mappings Synchronization
+
+For example, it can be used to synchronize the address mappings stored in the LDAP server to the TMail Server(s) of a TMail deployment.
+
+#### Architecture
+
+Given the following LDAP entry:
+```
+dn: uid=rkowalsky,ou=users,dc=linagora.com,dc=lng
+[...]
+mail: rkowalsky@linagora.com
+otherMailbox: addressMapping1@linagora.com
+otherMailbox: addressMapping2@linagora.com
+```
+
+This will be represented as the following TMail address mappings:
+```bash
+$ curl -XGET http://ip:port/mappings/user/rkowalsky@linagora.com
+
+[
+  {
+    "type": "Address",
+    "mapping": "addressMapping1@linagora.com"
+  },
+  {
+    "type": "Address",
+    "mapping": "addressMapping2@linagora.com"
+  }
+]
+```
+
+Please notice that users need to be created in James before creating address mappings for those users.
+
+The pivot used for the synchronization in the LSC connector is the email address, here `rkowalsky@linagora.com` stored in the `email` attribute.
+
+The destination attribute for the LSC address mappings connector is named `addressMappings`.
+
+#### Supported operations
+- **Update**: If a user has some address mappings in James, but there are some address mappings in LDAP that do not exist yet for the user in James side, those address mappings would be created.
+  If a user has some address mappings in James but do not exist in LDAP, be careful that those address mappings in James would be removed.
+- **Delete**: If a user exists in James but does not exist in LDAP, then all of his address mappings on James should be removed.
+
 ### JMAP Identity provisioning
 
 For example, it can be used to provision default JMAP identity for users that leverages the names stored in an LDAP instance to the TMail Server(s) of a TMail deployment.
