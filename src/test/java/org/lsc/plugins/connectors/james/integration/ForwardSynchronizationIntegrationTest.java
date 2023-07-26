@@ -205,7 +205,7 @@ class ForwardSynchronizationIntegrationTest {
                     .body("[1].mailAddress", equalTo("forward2@gmail.com"));
 
                 given(requestSpecification)
-                    .get(String.format("/address/forwards/%s", ALICE)).prettyPeek()
+                    .get(String.format("/address/forwards/%s", ALICE))
                 .then()
                     .statusCode(HttpStatus.SC_OK)
                     .body("mailAddress", hasSize(1))

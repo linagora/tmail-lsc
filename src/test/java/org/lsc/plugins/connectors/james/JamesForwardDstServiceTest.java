@@ -435,7 +435,6 @@ class JamesForwardDstServiceTest {
 
 		boolean applied = testee.apply(modifications);
 
-		// no added ANDRE forward => debug
 		assertThat(applied).isTrue();
 		with()
 			.get(BOB)
