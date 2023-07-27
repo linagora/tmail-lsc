@@ -133,9 +133,6 @@ public class JamesDao {
 			.map(addressMappingDto -> new AddressMapping(addressMappingDto.getMapping()))
 			.collect(Collectors.toList());
 
-//		if (addressMappings.isEmpty()) {
-//			throw new NotFoundException();
-//		}
 		return addressMappings;
 	}
 
