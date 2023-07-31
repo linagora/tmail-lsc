@@ -179,6 +179,45 @@ The pivot used for the synchronization in the LSC connector is the email address
 
 The destination attributes for the LSC aliases connector are named `firstname` and `surname`.
 
+### Forwards Synchronization
+
+For example, it can be used to synchronize the forwards stored in the LDAP server to the TMail Server(s) of a TMail deployment.
+
+#### Architecture
+
+Given the following LDAP entry:
+```
+dn: uid=rkowalsky,ou=users,dc=linagora.com,dc=lng
+[...]
+mail: rkowalsky@linagora.com
+otherMailbox: forward1@linagora.com
+otherMailbox: forward2@linagora.com
+```
+
+This will be represented as the following TMail address forwards:
+```bash
+$ curl -XGET http://ip:port/address/forwards/rkowalsky@linagora.com
+
+[
+  {"mailAddress":"forward1@linagora.com"},
+  {"mailAddress":"forward2@linagora.com"}
+]
+```
+
+As addresses forwards in TMail are only created if there are some sources, an LDAP entry without `otherMailbox` attribute won't be synchronized.
+
+Please notice that users need to be created in James before creating forwards for those users.
+
+The pivot used for the synchronization in the LSC connector is the email address, here `rkowalsky@linagora.com` stored in the `email` attribute.
+
+The destination attribute for the LSC forwards connector is named `forwards`.
+
+#### Supported operations
+- **Create**: If a user has no forward in James, but has some forwards in LDAP, then those forwards would be created on James.
+- **Update**: If a user has some forwards in James, but there are some forwards in LDAP that do not exist yet for the user in James side, those forwards would be created.
+  Note that we would not remove the forwards that are in James but not in LDAP, because those forwards could be user created forwards via JMAP.
+- **Delete**: If a user does not exist in LDAP, then all of his forwards on James would be removed.
+
 ### Configuration
 
 The plugin connection needs a JWT token to connect to TMail. To configure this JWT token, set the `password` field of the plugin connection as the JWT token you want to use.
