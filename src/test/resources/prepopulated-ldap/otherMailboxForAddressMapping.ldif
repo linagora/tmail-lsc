@@ -1,0 +1,16 @@
+dn: uid=bob, ou=people, dc=james,dc=org
+changetype: modify
+add: objectClass
+objectClass: extensibleObject
+-
+add: otherMailbox
+otherMailbox: addressMapping1@gmail.com
+otherMailbox: addressMapping2@gmail.com
+
+dn: uid=alice, ou=people, dc=james,dc=org
+changetype: modify
+add: objectClass
+objectClass: extensibleObject
+-
+add: otherMailbox
+otherMailbox: addressMapping1@gmail.com
