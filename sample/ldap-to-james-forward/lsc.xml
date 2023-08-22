@@ -25,7 +25,7 @@
   <audits/>
   <tasks>
     <task>
-      <name>identitySynchronization</name>
+      <name>forwardSynchronization</name>
       <bean>org.lsc.beans.SimpleBean</bean>
       <ldapSourceService>
         <name>openldap-user</name>
@@ -36,24 +36,22 @@
         </pivotAttributes>
         <fetchedAttributes>
           <string>mail</string>
-          <string>givenName</string>
-          <string>sn</string>
+          <string>otherMailbox</string>
         </fetchedAttributes>
         <getAllFilter>(&amp;(objectClass=inetOrgPerson)(mail=*))</getAllFilter>
         <getOneFilter>(&amp;(objectClass=inetOrgPerson)(mail={mail}))</getOneFilter>
         <cleanFilter>(&amp;(objectClass=inetOrgPerson)(mail={email}))</cleanFilter>
       </ldapSourceService>
-      <pluginDestinationService implementationClass="org.lsc.plugins.connectors.james.JamesIdentityDstService">
-        <name>james-identity-dst</name>
+      <pluginDestinationService implementationClass="org.lsc.plugins.connectors.james.JamesForwardDstService">
+        <name>james-forward-dst</name>
         <connection reference="james" />
-        <james:jamesIdentityService>
-          <name>james-identity-service-dst</name>
+        <james:jamesForwardService>
+          <name>james-forward-service-dst</name>
           <connection reference="james" />
           <james:writableAttributes>
-            <string>firstname</string>
-            <string>surname</string>
+            <string>forwards</string>
           </james:writableAttributes>
-        </james:jamesIdentityService>
+        </james:jamesForwardService>
       </pluginDestinationService>
       <propertiesBasedSyncOptions>
         <mainIdentifier>srcBean.getDatasetFirstValueById('mail');</mainIdentifier>
@@ -61,8 +59,8 @@
         <defaultPolicy>FORCE</defaultPolicy>
         <conditions>
           <create>true</create>
-          <update>false</update>
-          <delete>false</delete>
+          <update>true</update>
+          <delete>true</delete>
           <changeId>false</changeId>
         </conditions>
         <dataset>
@@ -72,15 +70,9 @@
           </forceValues>
         </dataset>
         <dataset>
-          <name>firstname</name>
+          <name>forwards</name>
           <forceValues>
-            <string>srcBean.getDatasetFirstValueById("givenName")</string>
-          </forceValues>
-        </dataset>
-        <dataset>
-          <name>surname</name>
-          <forceValues>
-            <string>srcBean.getDatasetFirstValueById("sn")</string>
+            <string>srcBean.getDatasetValuesById("otherMailbox")</string>
           </forceValues>
         </dataset>
       </propertiesBasedSyncOptions>
