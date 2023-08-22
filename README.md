@@ -254,6 +254,9 @@ The pivot used for the synchronization in the LSC connector is the email address
 
 The destination attribute for the LSC forwards connector is named `forwards`.
 
+Be default, local copy forwards from LDAP would not be synchronized. To allow to synchronize local copy forwards, add 
+the following JVM property when run the LSC script: `-Dallow.synchronize.local.copy.forwards=true`.
+
 #### Supported operations
 - **Create**: If a user has no forward in James, but has some forwards in LDAP, then those forwards would be created on James.
 - **Update**: If a user has some forwards in James, but there are some forwards in LDAP that do not exist yet for the user in James side, those forwards would be created.
