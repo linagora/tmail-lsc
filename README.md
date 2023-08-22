@@ -233,7 +233,7 @@ dn: uid=rkowalsky,ou=users,dc=linagora.com,dc=lng
 [...]
 mail: rkowalsky@linagora.com
 otherMailbox: forward1@linagora.com
-otherMailbox: forward2@linagora.com
+otherMailbox: rkowalsky@linagora.com
 ```
 
 This will be represented as the following TMail address forwards:
@@ -241,10 +241,15 @@ This will be represented as the following TMail address forwards:
 $ curl -XGET http://ip:port/address/forwards/rkowalsky@linagora.com
 
 [
-  {"mailAddress":"forward1@linagora.com"},
-  {"mailAddress":"forward2@linagora.com"}
+  {"mailAddress":"forward1@linagora.com"}
 ]
 ```
+
+Be default, local copy forwards from LDAP (e.g. `rkowalsky@linagora.com` in the above case) would not be synchronized.
+
+To allow synchronizing local copy forwards, add
+the following JVM property when run the LSC script: `-Dallow.synchronize.local.copy.forwards=true`.
+Setting this property to `false` or omitting this property would not synchronize local copy forwards.
 
 As addresses forwards in TMail are only created if there are some sources, an LDAP entry without `otherMailbox` attribute won't be synchronized.
 
@@ -253,9 +258,6 @@ Please notice that users need to be created in James before creating forwards fo
 The pivot used for the synchronization in the LSC connector is the email address, here `rkowalsky@linagora.com` stored in the `email` attribute.
 
 The destination attribute for the LSC forwards connector is named `forwards`.
-
-Be default, local copy forwards from LDAP would not be synchronized. To allow to synchronize local copy forwards, add 
-the following JVM property when run the LSC script: `-Dallow.synchronize.local.copy.forwards=true`.
 
 #### Supported operations
 - **Create**: If a user has no forward in James, but has some forwards in LDAP, then those forwards would be created on James.
