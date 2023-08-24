@@ -43,6 +43,9 @@
 package org.lsc.plugins.connectors.james;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -104,7 +107,7 @@ public class JamesDao {
 			return !ldapForward.getMailAddress().equals(userMailAddress);
 		}
 	}
-	
+
 	public JamesDao(String url, String token, TaskType task) {
 		authorizationBearer = "Bearer " + token;
 		aliasesClient = ClientBuilder.newClient()
@@ -273,28 +276,37 @@ public class JamesDao {
 	}
 
 	private boolean createForward(User user, Forward forward) {
-		WebTarget target = forwardsClient.path(user.email)
-			.path("targets")
-			.path(forward.getMailAddress());
+		try {
+			WebTarget target = forwardsClient.path(user.email)
+				.path("targets")
+				.path(urlEncode(forward.getMailAddress()));
 
-		LOGGER.debug("Creating forward: " + target.getUri().toString());
+			LOGGER.debug("Creating forward: " + target.getUri().toString());
 
-		Response response = target.request()
-			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.put(Entity.text(""));
-		String rawResponseBody = response.readEntity(String.class);
-		response.close();
-		if (checkResponse(response)) {
-			LOGGER.debug("Created forward {} for user {} successfully", forward.getMailAddress(), user.email);
-			return true;
-		} else {
-			LOGGER.error(String.format("Error %d (%s - %s) while creating forward: %s",
-				response.getStatus(),
-				response.getStatusInfo(),
-				rawResponseBody,
-				target.getUri().toString()));
-			return false;
+			Response response = target.request()
+				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+				.put(Entity.text(""));
+			String rawResponseBody = response.readEntity(String.class);
+			response.close();
+			if (checkResponse(response)) {
+				LOGGER.debug("Created forward {} for user {} successfully", forward.getMailAddress(), user.email);
+				return true;
+			} else {
+				LOGGER.error(String.format("Error %d (%s - %s) while creating forward: %s",
+					response.getStatus(),
+					response.getStatusInfo(),
+					rawResponseBody,
+					target.getUri().toString()));
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+				LOGGER.error("Failed to URL encoding mail address {} with error {}", forward.getMailAddress(), e.toString());
+				return false;
 		}
+	}
+
+	private String urlEncode(String address) throws UnsupportedEncodingException {
+		return URLEncoder.encode(address, StandardCharsets.UTF_8.toString());
 	}
 
 	public boolean updateForwards(User user, List<Forward> ldapForwards, boolean allowSynchronizeLocalCopyForwards) {
@@ -314,6 +326,7 @@ public class JamesDao {
 		List<Forward> forwardsToDelete = getForwards(user.email);
 		return deleteForwards(user, forwardsToDelete);
 	}
+
 	private boolean deleteForwards(User user, List<Forward> forwardsToDelete) {
 		return forwardsToDelete.stream()
 			.reduce(true,
@@ -322,22 +335,27 @@ public class JamesDao {
 	}
 
 	private boolean deleteForward(User user, Forward forward) {
-		WebTarget target = forwardsClient.path(user.email).path("targets").path(forward.getMailAddress());
-		LOGGER.debug("DELETEting forward: " + target.getUri().toString());
-		Response response = target.request()
-			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.delete();
-		String rawResponseBody = response.readEntity(String.class);
-		response.close();
-		if (checkResponse(response)) {
-			LOGGER.debug("DELETE successfully");
-			return true;
-		} else {
-			LOGGER.error(String.format("Error %d (%s - %s) while deleting forward: %s",
-				response.getStatus(),
-				response.getStatusInfo(),
-				rawResponseBody,
-				target.getUri().toString()));
+		try {
+			WebTarget target = forwardsClient.path(user.email).path("targets").path(urlEncode(forward.getMailAddress()));
+			LOGGER.debug("DELETEting forward: " + target.getUri().toString());
+			Response response = target.request()
+				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+				.delete();
+			String rawResponseBody = response.readEntity(String.class);
+			response.close();
+			if (checkResponse(response)) {
+				LOGGER.debug("DELETE successfully");
+				return true;
+			} else {
+				LOGGER.error(String.format("Error %d (%s - %s) while deleting forward: %s",
+					response.getStatus(),
+					response.getStatusInfo(),
+					rawResponseBody,
+					target.getUri().toString()));
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+			LOGGER.error("Failed to URL encoding mail address {} with error {}", forward.getMailAddress(), e.toString());
 			return false;
 		}
 	}
