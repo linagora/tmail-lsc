@@ -115,7 +115,7 @@ class JamesAddressMappingDstServiceTest {
 
 	@BeforeAll
 	static void beforeAll() throws Exception {
-		james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
+		james = new GenericContainer<>("quanth99/tmail-backend-memory:double-decoding-fixed"); // TODO switch back to TMail latest image after https://github.com/apache/james-project/pull/1697 got merged
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_publickey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_privatekey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/webadmin.properties"), "/root/conf/");
@@ -372,6 +372,29 @@ class JamesAddressMappingDstServiceTest {
 			.body("mapping",  hasSize(1))
 			.body("[0].mapping", equalTo(ALICE));
 	}
+
+	@Test
+	void updateWhenAUserWithoutAddressMappingsInJamesButSubAddressMappingInLdapShouldCreateTheSubAddressMappingSuccessfully() throws Exception {
+		createUser(BOB);
+
+		LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification modification = new LscDatasetModification(
+				LscDatasetModificationType.REPLACE_VALUES, "addressMappings", ImmutableList.of("alice+tag@domain.tld"));
+		modifications.setLscAttributeModifications(ImmutableList.of(modification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+
+		with()
+			.basePath("/mappings/user")
+		.get(BOB)
+			.then()
+			.statusCode(HttpStatus.SC_OK)
+			.body("mapping",  hasSize(1))
+			.body("[0].mapping", equalTo("alice+tag@domain.tld"));
+	}
 	
 	@Test
 	void updateWithPreviousAddressMappingPlusOneShouldAddTheNewAddressMapping() throws Exception {
@@ -438,6 +461,26 @@ class JamesAddressMappingDstServiceTest {
 		createUser(BOB);
 		createAddressMapping(BOB, ALICE);
 		createAddressMapping(BOB, ANDRE);
+
+		LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+	    modifications.setLscAttributeModifications(ImmutableList.of());
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.basePath("/mappings/user")
+		.get(BOB)
+			.then()
+			.statusCode(HttpStatus.SC_OK)
+			.body("mapping",  hasSize(0));
+	}
+
+	@Test
+	void deleteOperationShouldRemoveSubAddressMapping() throws Exception {
+		createUser(BOB);
+		createAddressMapping(BOB, "alice+tag@domain.tld");
 
 		LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
 		modifications.setMainIdentifer(BOB);

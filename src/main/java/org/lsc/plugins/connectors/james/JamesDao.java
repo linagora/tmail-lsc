@@ -187,24 +187,28 @@ public class JamesDao {
 	}
 
 	private boolean createAddressMapping(User user, AddressMapping addressMapping) {
-		WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, addressMapping.getMapping()));
+		try {
+			WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, urlEncode(addressMapping.getMapping())));
+			LOGGER.debug("Creating address mapping: " + target.getUri().toString());
 
-		LOGGER.debug("Creating address mapping: " + target.getUri().toString());
-
-		Response response = target.request()
-			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.post(Entity.text(""));
-		String rawResponseBody = response.readEntity(String.class);
-		response.close();
-		if (checkResponse(response)) {
-			LOGGER.debug("Created address mapping {} for user {} successfully", addressMapping.getMapping(), user.email);
-			return true;
-		} else {
-			LOGGER.error(String.format("Error %d (%s - %s) while creating address mapping: %s",
-				response.getStatus(),
-				response.getStatusInfo(),
-				rawResponseBody,
-				target.getUri().toString()));
+			Response response = target.request()
+				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+				.post(Entity.text(""));
+			String rawResponseBody = response.readEntity(String.class);
+			response.close();
+			if (checkResponse(response)) {
+				LOGGER.debug("Created address mapping {} for user {} successfully", addressMapping.getMapping(), user.email);
+				return true;
+			} else {
+				LOGGER.error(String.format("Error %d (%s - %s) while creating address mapping: %s",
+					response.getStatus(),
+					response.getStatusInfo(),
+					rawResponseBody,
+					target.getUri().toString()));
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+			LOGGER.error("Failed to URL encoding mail address {} with error {}", addressMapping.getMapping(), e.toString());
 			return false;
 		}
 	}
@@ -222,24 +226,28 @@ public class JamesDao {
 	}
 
 	private boolean removeAddressMapping(User user, AddressMapping addressMapping) {
-		WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, addressMapping.getMapping()));
+		try {
+			WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, urlEncode(addressMapping.getMapping())));
+			LOGGER.debug("DELETEting address mapping: " + target.getUri().toString());
 
-		LOGGER.debug("DELETEting address mapping: " + target.getUri().toString());
-
-		Response response = target.request()
-			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
-			.delete();
-		String rawResponseBody = response.readEntity(String.class);
-		response.close();
-		if (checkResponse(response)) {
-			LOGGER.debug("DELETE address mapping successfully");
-			return true;
-		} else {
-			LOGGER.error(String.format("Error %d (%s - %s) while deleting address mapping: %s",
-				response.getStatus(),
-				response.getStatusInfo(),
-				rawResponseBody,
-				target.getUri().toString()));
+			Response response = target.request()
+				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+				.delete();
+			String rawResponseBody = response.readEntity(String.class);
+			response.close();
+			if (checkResponse(response)) {
+				LOGGER.debug("DELETE address mapping successfully");
+				return true;
+			} else {
+				LOGGER.error(String.format("Error %d (%s - %s) while deleting address mapping: %s",
+					response.getStatus(),
+					response.getStatusInfo(),
+					rawResponseBody,
+					target.getUri().toString()));
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+			LOGGER.error("Failed to URL encoding mail address {} with error {}", addressMapping.getMapping(), e.toString());
 			return false;
 		}
 	}
