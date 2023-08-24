@@ -154,6 +154,11 @@ class JamesForwardDstServiceTest {
 		testee = new JamesForwardDstService(task);
 	}
 
+	@AfterEach
+	void afterEach() {
+		System.clearProperty("allow.synchronize.local.copy.forwards");
+	}
+
 	private static String jwtToken() throws Exception {
 		Security.addProvider(new BouncyCastleProvider());
 
@@ -369,6 +374,46 @@ class JamesForwardDstServiceTest {
 			.body("[0].mailAddress", equalTo(ALICE))
 			.body("[1].mailAddress", equalTo(ANDRE));
 	}
+
+	@Test
+	void createShouldNotCreateLocalCopyForwardByDefault() throws Exception {
+		testee = new JamesForwardDstService(task);
+
+		LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification lscDatasetModification = new LscDatasetModification(
+			LscDatasetModificationType.REPLACE_VALUES, "forwards", ImmutableList.of(BOB));
+		modifications.setLscAttributeModifications(ImmutableList.of(lscDatasetModification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.get(BOB)
+		.then()
+			.statusCode(HttpStatus.SC_NOT_FOUND);
+	}
+
+	@Test
+	void createShouldCreateLocalCopyForwardWhenAllowedSynchronizeLocalCopyForwards() throws Exception {
+		System.setProperty("allow.synchronize.local.copy.forwards", "true");
+		testee = new JamesForwardDstService(task);
+
+		LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification lscDatasetModification = new LscDatasetModification(
+			LscDatasetModificationType.REPLACE_VALUES, "forwards", ImmutableList.of(BOB));
+		modifications.setLscAttributeModifications(ImmutableList.of(lscDatasetModification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.get(BOB)
+		.then()
+			.body("mailAddress", hasSize(1))
+			.body("[0].mailAddress", equalTo(BOB));
+	}
 	
 	@Test
 	void updateWithNoSourceAttributeModificationShouldFail() throws Exception {
@@ -442,6 +487,61 @@ class JamesForwardDstServiceTest {
 			.body("mailAddress", hasSize(2))
 			.body("[0].mailAddress", equalTo(ALICE))
 			.body("[1].mailAddress", equalTo(ANDRE));
+	}
+
+	@Test
+	void updateWithExistingForwardPlusLocalCopyForwardOnLdapShouldNotCreateTheLocalForwardOnJamesByDefault() throws Exception {
+		// do not allow to synchronize local copy forwards, by default
+
+		// GIVEN on James BOB had ALICE forward
+		createForward(BOB, ALICE);
+
+		// WHEN LDAP BOB has ALICE and himself as forwards
+		LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification modification = new LscDatasetModification(
+				LscDatasetModificationType.REPLACE_VALUES, "forwards", ImmutableList.of(ALICE, BOB));
+		modifications.setLscAttributeModifications(ImmutableList.of(modification));
+
+		boolean applied = testee.apply(modifications);
+
+		// THEN the BOB local copy forward should not be created on James
+		assertThat(applied).isTrue();
+
+		with()
+			.get(BOB)
+		.then()
+			.body("mailAddress", hasSize(1))
+			.body("[0].mailAddress", equalTo(ALICE));
+	}
+
+	@Test
+	void updateWithExistingForwardPlusLocalCopyForwardOnLdapShouldCreateTheLocalForwardOnJamesWhenAllowedToSynchronizeLocalCopyForwards() throws Exception {
+		// allow to synchronize local copy forwards
+		System.setProperty("allow.synchronize.local.copy.forwards", "true");
+		testee = new JamesForwardDstService(task);
+
+		// GIVEN on James BOB had ALICE forward
+		createForward(BOB, ALICE);
+
+		// WHEN LDAP BOB has ALICE and himself as forwards
+		LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification modification = new LscDatasetModification(
+				LscDatasetModificationType.REPLACE_VALUES, "forwards", ImmutableList.of(ALICE, BOB));
+		modifications.setLscAttributeModifications(ImmutableList.of(modification));
+
+		boolean applied = testee.apply(modifications);
+
+		// THEN the BOB local copy forward should be created on James
+		assertThat(applied).isTrue();
+
+		with()
+			.get(BOB)
+		.then()
+			.body("mailAddress", hasSize(2))
+			.body("[0].mailAddress", equalTo(ALICE))
+			.body("[1].mailAddress", equalTo(BOB));
 	}
 	
 	@Test

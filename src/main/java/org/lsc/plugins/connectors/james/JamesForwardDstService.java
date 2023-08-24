@@ -1,5 +1,7 @@
 package org.lsc.plugins.connectors.james;
 
+import static org.lsc.plugins.connectors.james.JamesDao.synchronizeLocalCopyForwards;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 public class JamesForwardDstService implements IWritableService {
+	private static final String ALLOW_SYNCHRONIZE_LOCAL_COPY_FORWARDS_PROPERTY_KEY = "allow.synchronize.local.copy.forwards";
+	private static final String ALLOW_SYNCHRONIZE_LOCAL_COPY_FORWARDS_PROPERTY_DEFAULT_VALUE = "false";
 	private static final Logger LOGGER = LoggerFactory.getLogger(JamesForwardDstService.class);
 	private static final String FORWARDS_ATTRIBUTE = "forwards";
 
@@ -37,6 +41,7 @@ public class JamesForwardDstService implements IWritableService {
 	private final JamesService service;
 	private final PluginConnectionType connection;
 	private final JamesDao jamesDao;
+	private final boolean allowSynchronizeLocalCopyForwards;
 
 	public JamesForwardDstService(final TaskType task) throws LscServiceConfigurationException {
 		try {
@@ -50,6 +55,8 @@ public class JamesForwardDstService implements IWritableService {
 			LOGGER.debug("Task bean is: " + task.getBean());
 			connection = (PluginConnectionType) service.getConnection().getReference();
 			jamesDao = new JamesDao(connection.getUrl(), connection.getPassword(), task);
+			allowSynchronizeLocalCopyForwards = Boolean.parseBoolean(System.getProperty(ALLOW_SYNCHRONIZE_LOCAL_COPY_FORWARDS_PROPERTY_KEY,
+				ALLOW_SYNCHRONIZE_LOCAL_COPY_FORWARDS_PROPERTY_DEFAULT_VALUE));
 		} catch (ClassNotFoundException e) {
 			throw new LscServiceConfigurationException(e);
 		}
@@ -126,14 +133,21 @@ public class JamesForwardDstService implements IWritableService {
 					return true;
 				case CREATE_OBJECT:
 					LOGGER.debug("User {} has no forwards in James. Creating forwards from LDAP source for the first time.", user.email);
-					List<Forward> forwardsToCreate = forwardsFromSource(lm).orElse(ImmutableList.of());
+
+					List<Forward> forwardsToCreate = forwardsFromSource(lm)
+						.map(forwards -> forwards
+							.stream()
+							.filter(ldapForward -> synchronizeLocalCopyForwards(ldapForward, user.email, allowSynchronizeLocalCopyForwards))
+							.collect(Collectors.toList()))
+						.orElse(ImmutableList.of());
+
 					return jamesDao.createForwards(user, forwardsToCreate);
 				case UPDATE_OBJECT:
 					Optional<List<Forward>> ldapForwards = forwardsFromSource(lm);
 
 					return ldapForwards.map(forwards -> {
 						LOGGER.debug("Updating James forwards of user {} with {} ", user.email, lm.getModificationsItemsByHash());
-						return jamesDao.updateForwards(user, forwards);
+						return jamesDao.updateForwards(user, forwards, allowSynchronizeLocalCopyForwards);
 					}).orElse(false);
 				case DELETE_OBJECT:
 					LOGGER.debug("User {} exists on James but not in LDAP. Deleting James forwards of this user.", user.email);

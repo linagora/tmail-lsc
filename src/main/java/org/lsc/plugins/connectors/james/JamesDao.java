@@ -96,6 +96,14 @@ public class JamesDao {
 	private final WebTarget addressMappingsClient;
 	private final String authorizationBearer;
 	private final ObjectMapper mapper;
+
+	public static boolean synchronizeLocalCopyForwards(Forward ldapForward, String userMailAddress, boolean allowSynchronizeLocalCopyForwards) {
+		if (allowSynchronizeLocalCopyForwards) {
+			return true;
+		} else {
+			return !ldapForward.getMailAddress().equals(userMailAddress);
+		}
+	}
 	
 	public JamesDao(String url, String token, TaskType task) {
 		authorizationBearer = "Bearer " + token;
@@ -289,16 +297,16 @@ public class JamesDao {
 		}
 	}
 
-	public boolean updateForwards(User user, List<Forward> ldapForwards) {
+	public boolean updateForwards(User user, List<Forward> ldapForwards, boolean allowSynchronizeLocalCopyForwards) {
 		List<Forward> jamesForwards = getForwards(user.email);
-		List<Forward> forwardsToAddToJames = computeForwardsToAdd(ldapForwards, jamesForwards);
+		List<Forward> forwardsToAddToJames = computeForwardsToAdd(user, ldapForwards, jamesForwards, allowSynchronizeLocalCopyForwards);
 		// Removing forwards is not supported. In case User has a forward that does not exist in LDAP, we should not remove that forward, that could be user JMAP forward.
 		return createForwards(user, forwardsToAddToJames);
 	}
 
-	private List<Forward> computeForwardsToAdd(List<Forward> ldapForwards, List<Forward> jamesForwards) {
+	private List<Forward> computeForwardsToAdd(User user, List<Forward> ldapForwards, List<Forward> jamesForwards, boolean allowSynchronizeLocalCopyForwards) {
 		return ldapForwards.stream()
-			.filter(forward -> !jamesForwards.contains(forward))
+			.filter(ldapForward -> !jamesForwards.contains(ldapForward) && synchronizeLocalCopyForwards(ldapForward, user.email, allowSynchronizeLocalCopyForwards))
 			.collect(Collectors.toList());
 	}
 

@@ -233,7 +233,7 @@ dn: uid=rkowalsky,ou=users,dc=linagora.com,dc=lng
 [...]
 mail: rkowalsky@linagora.com
 otherMailbox: forward1@linagora.com
-otherMailbox: forward2@linagora.com
+otherMailbox: rkowalsky@linagora.com
 ```
 
 This will be represented as the following TMail address forwards:
@@ -241,10 +241,15 @@ This will be represented as the following TMail address forwards:
 $ curl -XGET http://ip:port/address/forwards/rkowalsky@linagora.com
 
 [
-  {"mailAddress":"forward1@linagora.com"},
-  {"mailAddress":"forward2@linagora.com"}
+  {"mailAddress":"forward1@linagora.com"}
 ]
 ```
+
+Be default, local copy forwards from LDAP (e.g. `rkowalsky@linagora.com` in the above case) would not be synchronized.
+
+To allow synchronizing local copy forwards, add
+the following JVM property when run the LSC script: `-Dallow.synchronize.local.copy.forwards=true`.
+Setting this property to `false` or omitting this property would not synchronize local copy forwards.
 
 As addresses forwards in TMail are only created if there are some sources, an LDAP entry without `otherMailbox` attribute won't be synchronized.
 
