@@ -94,7 +94,7 @@ import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.http.ContentType;
 
-public class JamesAliasDstServiceTest {
+class JamesAliasDstServiceTest {
 	private static final URL PRIVATE_KEY = ClassLoader.getSystemResource("conf/jwt_privatekey");
 	private static final URL PUBLIC_KEY = ClassLoader.getSystemResource("conf/jwt_publickey");
 	private static final String DOMAIN = "james.org";
@@ -109,7 +109,7 @@ public class JamesAliasDstServiceTest {
 
 	@BeforeAll
 	static void setup() throws Exception {
-		james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
+		james = new GenericContainer<>("quanth99/tmail-backend-memory:double-decoding-fixed"); // TODO switch back to TMail latest image after https://github.com/apache/james-project/pull/1697 got merged
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_publickey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_privatekey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/webadmin.properties"), "/root/conf/");
@@ -412,6 +412,31 @@ public class JamesAliasDstServiceTest {
 			.body("[0].source", equalTo(alias1))
 			.body("[1].source", equalTo(alias2));
 	}
+
+	@Test
+	void createShouldSucceedWhenAddingSubAddressingAlias() throws Exception {
+		String email = "user@james.org";
+		String subAddressingAlias = "alias+tag@james.org";
+
+		testee = new JamesAliasDstService(task);
+
+		LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+		modifications.setMainIdentifer(email);
+
+		LscDatasetModification aliasesModification = new LscDatasetModification(
+				LscDatasetModificationType.REPLACE_VALUES, "sources", ImmutableList.of(subAddressingAlias));
+
+		modifications.setLscAttributeModifications(ImmutableList.of(aliasesModification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.get(email)
+		.then()
+			.body("source", hasSize(1))
+			.body("[0].source", equalTo(subAddressingAlias));
+	}
 	
 	@Test
 	public void updateWithNoSourceAttributeModificationShouldFail() throws Exception {
@@ -566,6 +591,27 @@ public class JamesAliasDstServiceTest {
 		assertThat(applied).isTrue();
 		with()
 		.get(email)
+		.then()
+			.body("source", hasSize(0));
+	}
+
+	@Test
+	void deleteShouldSucceedRemovingSubAddressingAlias() throws Exception {
+		String email = "user@james.org";
+		String subAddressingAlias = "alias+tag@james.org";
+		createAlias(email, subAddressingAlias);
+
+		testee = new JamesAliasDstService(task);
+
+		LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+		modifications.setMainIdentifer(email);
+		modifications.setLscAttributeModifications(ImmutableList.of());
+
+		boolean applied = testee.apply(modifications);
+		
+		assertThat(applied).isTrue();
+		with()
+			.get(email)
 		.then()
 			.body("source", hasSize(0));
 	}
