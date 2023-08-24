@@ -114,7 +114,7 @@ class JamesForwardDstServiceTest {
 
 	@BeforeAll
 	static void beforeAll() throws Exception {
-		james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
+		james = new GenericContainer<>("quanth99/tmail-backend-memory:double-decoding-fixed"); // TODO switch back to TMail latest image after https://github.com/apache/james-project/pull/1697 got merged
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_publickey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_privatekey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/webadmin.properties"), "/root/conf/");
@@ -414,7 +414,26 @@ class JamesForwardDstServiceTest {
 			.body("mailAddress", hasSize(1))
 			.body("[0].mailAddress", equalTo(BOB));
 	}
-	
+
+	@Test
+	void createShouldSucceedWhenAddingSubAddressingForward() throws Exception {
+		LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification lscDatasetModification = new LscDatasetModification(
+			LscDatasetModificationType.REPLACE_VALUES, "forwards", ImmutableList.of("alice+tag@james.org"));
+		modifications.setLscAttributeModifications(ImmutableList.of(lscDatasetModification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+
+		with()
+			.get(BOB)
+			.then()
+			.body("mailAddress", hasSize(1))
+			.body("[0].mailAddress", equalTo("alice+tag@james.org"));
+	}
+
 	@Test
 	void updateWithNoSourceAttributeModificationShouldFail() throws Exception {
 		createForward(BOB, ALICE);
@@ -543,7 +562,7 @@ class JamesForwardDstServiceTest {
 			.body("[0].mailAddress", equalTo(ALICE))
 			.body("[1].mailAddress", equalTo(BOB));
 	}
-	
+
 	@Test
 	void updateWithPreviousForwardsMinusOneShouldNotRemoveTheMinusOne() throws Exception {
 		createForward(BOB, ALICE);
@@ -573,6 +592,23 @@ class JamesForwardDstServiceTest {
 	void deleteOperationShouldRemoveTheForwardsOfTheUser() throws Exception {
 		createForward(BOB, ALICE);
 		createForward(BOB, ANDRE);
+
+		LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+	    modifications.setLscAttributeModifications(ImmutableList.of());
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.get(BOB)
+		.then()
+			.statusCode(HttpStatus.SC_NOT_FOUND);
+	}
+
+	@Test
+	void deleteOperationShouldSucceedRemovingSubAddressingForward() throws Exception {
+		createForward(BOB, "alice+tag@domain.tld");
 
 		LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
 		modifications.setMainIdentifer(BOB);
