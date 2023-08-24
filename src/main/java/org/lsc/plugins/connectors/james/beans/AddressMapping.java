@@ -50,7 +50,7 @@ public class AddressMapping {
 		this.mapping = mapping;
 	}
 
-	public final String mapping;
+	private final String mapping;
 
 	public String getMapping() {
 		return mapping;
