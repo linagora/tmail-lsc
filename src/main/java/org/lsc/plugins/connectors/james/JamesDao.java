@@ -426,22 +426,27 @@ public class JamesDao {
 	}
 
 	private boolean createAlias(User user, Alias alias) {
-		WebTarget target = aliasesClient.path(user.email).path("sources").path(alias.source);
-		LOGGER.debug("PUTting alias: " + target.getUri().toString());
-		Response response = target.request()
+		try {
+			WebTarget target = aliasesClient.path(user.email).path("sources").path(urlEncode(alias.source));
+			LOGGER.debug("PUTting alias: " + target.getUri().toString());
+			Response response = target.request()
 				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
 				.put(Entity.text(""));
-		String rawResponseBody = response.readEntity(String.class);
-		response.close();
-		if (checkResponse(response)) {
-			LOGGER.debug("PUT is successful");
-			return true;
-		} else {
-			LOGGER.error(String.format("Error %d (%s - %s) while creating alias: %s",
+			String rawResponseBody = response.readEntity(String.class);
+			response.close();
+			if (checkResponse(response)) {
+				LOGGER.debug("PUT is successful");
+				return true;
+			} else {
+				LOGGER.error(String.format("Error %d (%s - %s) while creating alias: %s",
 					response.getStatus(),
 					response.getStatusInfo(),
 					rawResponseBody,
 					target.getUri().toString()));
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+			LOGGER.error("Failed to URL encoding mail address {} with error {}", alias.source, e.toString());
 			return false;
 		}
 	}
@@ -454,24 +459,30 @@ public class JamesDao {
 	}
 
 	private boolean removeAlias(User user, Alias alias) {
-		WebTarget target = aliasesClient.path(user.email).path("sources").path(alias.source);
-		LOGGER.debug("DELETEting alias: " + target.getUri().toString());
-		Response response = target.request()
+		try {
+			WebTarget target = aliasesClient.path(user.email).path("sources").path(urlEncode(alias.source));
+			LOGGER.debug("DELETEting alias: " + target.getUri().toString());
+			Response response = target.request()
 				.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
 				.delete();
-		String rawResponseBody = response.readEntity(String.class);
-		response.close();
-		if (checkResponse(response)) {
-			LOGGER.debug("DELETE is successful");
-			return true;
-		} else {
-			LOGGER.error(String.format("Error %d (%s - %s) while deleting alias: %s",
+			String rawResponseBody = response.readEntity(String.class);
+			response.close();
+			if (checkResponse(response)) {
+				LOGGER.debug("DELETE is successful");
+				return true;
+			} else {
+				LOGGER.error(String.format("Error %d (%s - %s) while deleting alias: %s",
 					response.getStatus(),
 					response.getStatusInfo(),
 					rawResponseBody,
 					target.getUri().toString()));
+				return false;
+			}
+		} catch (UnsupportedEncodingException e) {
+			LOGGER.error("Failed to URL encoding mail address {} with error {}", alias.source, e.toString());
 			return false;
 		}
+
 	}
 
 	private static boolean checkResponse(Response response) {
