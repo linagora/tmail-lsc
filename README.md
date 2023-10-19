@@ -316,5 +316,7 @@ docker run -it -v ${PWD}/sample/ldap-to-tmail-contact/logback.xml:/opt/lsc/conf/
 Then run this command inside the container to run synchronization tasks:
 
 ```bash
-JAVA_OPTS=$JAVA_OPTS ./lsc --config $CONF_DIR --synchronize all --threads 1
+JAVA_OPTS=$JAVA_OPTS ./lsc --config $CONF_DIR --synchronize all --clean all --threads 1
 ```
+
+If don't want to delete dangling data on TMail, either turn the delete operation in `lsc.xml` to `false` or run the above command without `--clean all` parameter.
