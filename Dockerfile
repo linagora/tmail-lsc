@@ -1,5 +1,7 @@
 FROM eclipse-temurin:8-jre
 
+RUN apt-get update && apt-get -y install cron
+
 ADD /lsc-2.1.6 /opt/lsc
 RUN mkdir /opt/lsc/conf
 RUN chmod a+x /opt/lsc/*
