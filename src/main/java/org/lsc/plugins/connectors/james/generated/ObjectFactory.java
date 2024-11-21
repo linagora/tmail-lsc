@@ -69,6 +69,14 @@ public class ObjectFactory {
     }
 
     /**
+     * Create an instance of {@link JamesMailQuotaSizeService }
+     *
+     */
+    public JamesMailQuotaSizeService createJamesMailQuotaSizeService() {
+        return new JamesMailQuotaSizeService();
+    }
+
+    /**
      * Create an instance of {@link JamesUsersService }
      *
      */
