@@ -265,6 +265,42 @@ The destination attribute for the LSC forwards connector is named `forwards`.
   Note that we would not remove the forwards that are in James but not in LDAP, because those forwards could be user created forwards via JMAP.
 - **Delete**: If a user does not exist in LDAP, then all of his forwards on James would be removed.
 
+### Mail Quota Size Synchronization
+
+For example, it can be used to synchronize the mail quota size stored in the LDAP server to the TMail Server(s) of a TMail deployment.
+
+#### Architecture
+
+Given the following LDAP entry:
+```
+dn: uid=rkowalsky,ou=users,dc=linagora.com,dc=lng
+[...]
+mail: rkowalsky@linagora.com
+mailQuotaSize: 4000000000
+```
+
+This will be represented as the following TMail mail quota size:
+```bash
+$ curl -XGET http://ip:port/quota/users/rkowalsky@linagora.com/size
+
+4000000000
+```
+
+The `mailQuotaSize` LDAP attribute will be used as source of truth for the synchronization.
+
+Please notice that users need to be created in James before creating mail quota size for those users.
+
+The pivot used for the synchronization in the LSC connector is the email address, here `rkowalsky@linagora.com` stored in the `email` attribute.
+
+The destination attribute for the LSC forwards connector is named `mailQuotaSize`.
+
+#### Supported operations
+- **Create**: If a user has no mail quota size in TMail, but has mail quota size in LDAP, then it would be created on TMail.
+- **Update**: 
+  - If the admin changes a user's mail quota size on LDAP, the new mail quota size would be updated on TMail.
+  - If the admin unset a user's mail quota size on LDAP, the mail quota size would be removed on TMail.
+- **Delete**: If a user does not exist in LDAP, then his mail quota size on James would be removed.
+
 ### Configuration
 
 The plugin connection needs a JWT token to connect to TMail. To configure this JWT token, set the `password` field of the plugin connection as the JWT token you want to use.

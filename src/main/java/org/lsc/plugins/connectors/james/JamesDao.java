@@ -47,6 +47,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -68,6 +69,7 @@ import org.lsc.plugins.connectors.james.beans.Alias;
 import org.lsc.plugins.connectors.james.beans.Contact;
 import org.lsc.plugins.connectors.james.beans.Forward;
 import org.lsc.plugins.connectors.james.beans.Identity;
+import org.lsc.plugins.connectors.james.beans.QuotaSize;
 import org.lsc.plugins.connectors.james.beans.User;
 import org.lsc.plugins.connectors.james.beans.UserDto;
 import org.slf4j.Logger;
@@ -81,6 +83,7 @@ public class JamesDao {
 	
 	public static final String ALIASES_PATH = "/address/aliases";
 	public static final String FORWARDS_PATH = "/address/forwards";
+	public static final String QUOTA_SIZE_PATH = "/quota/users/%s/size";
 	public static final String IDENTITIES_PATH = "/users/%s/identities";
 	public static final String USERS_PATH = "/users";
 	public static final String DOMAIN_CONTACT_PATH = "/domains/%s/contacts/%s";
@@ -93,6 +96,7 @@ public class JamesDao {
 
 	private final WebTarget aliasesClient;
 	private final WebTarget forwardsClient;
+	private final WebTarget quotasClient;
 	private final WebTarget identitiesClient;
 	private final WebTarget usersClient;
 	private final WebTarget contactsClient;
@@ -119,6 +123,10 @@ public class JamesDao {
 			.register(JacksonFeature.class)
 			.target(url)
 			.path(FORWARDS_PATH);
+
+		quotasClient = ClientBuilder.newClient()
+			.register(JacksonFeature.class)
+			.target(url);
 
 		identitiesClient = ClientBuilder.newClient()
 			.register(JacksonFeature.class)
@@ -276,12 +284,56 @@ public class JamesDao {
 		return forwards;
 	}
 
+	public Optional<QuotaSize> getQuotaSize(String username) {
+		WebTarget target = quotasClient.path(String.format(QUOTA_SIZE_PATH, username));
+		LOGGER.debug("GETting quotaSize: " + target.getUri().toString());
+
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.get();
+
+		switch (response.getStatus()) {
+			case 200:
+				return Optional.of(new QuotaSize(response.readEntity(Long.class)));
+			case 204:
+				LOGGER.debug("No quota size limit defined for user {}", username);
+				return Optional.empty();
+			default:
+				LOGGER.debug("User {} does not exist.", username);
+				throw new NotFoundException();
+		}
+	}
+
 	public boolean createForwards(User user, List<Forward> forwardsToAdd) {
 		return forwardsToAdd.stream()
 			.reduce(true,
 				(result, forward) -> result && createForward(user, forward),
 				(result1, result2) -> result1 && result2);
 	}
+
+	public boolean setQuotaSize(User user, QuotaSize quotaSize) {
+		WebTarget target = quotasClient.path(String.format(QUOTA_SIZE_PATH, user.email));
+		LOGGER.debug("Updating quota size: " + target.getUri().toString());
+
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.put(Entity.text(String.valueOf(quotaSize.size)));
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+
+		if (checkResponse(response)) {
+			LOGGER.debug("Updated quota size {} for user {} successfully", quotaSize, user.email);
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while updating quota size: %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				target.getUri().toString()));
+			return false;
+		}
+	}
+
 
 	private boolean createForward(User user, Forward forward) {
 		try {
@@ -364,6 +416,29 @@ public class JamesDao {
 			}
 		} catch (UnsupportedEncodingException e) {
 			LOGGER.error("Failed to URL encoding mail address {} with error {}", forward.getMailAddress(), e.toString());
+			return false;
+		}
+	}
+
+	public boolean deleteQuotaSize(User user) {
+		WebTarget target = quotasClient.path(String.format(QUOTA_SIZE_PATH, user.email));
+		LOGGER.debug("DELETEting quota size: " + target.getUri().toString());
+
+		Response response = target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.delete();
+		String rawResponseBody = response.readEntity(String.class);
+		response.close();
+
+		if (checkResponse(response)) {
+			LOGGER.debug("Deleted Quota size successfully for user: {}", user.email);
+			return true;
+		} else {
+			LOGGER.error(String.format("Error %d (%s - %s) while deleting quota size: %s",
+				response.getStatus(),
+				response.getStatusInfo(),
+				rawResponseBody,
+				target.getUri().toString()));
 			return false;
 		}
 	}

@@ -1,0 +1,15 @@
+dn: uid=bob, ou=people, dc=james,dc=org
+changetype: modify
+add: objectClass
+objectClass: extensibleObject
+-
+add: mailQuotaSize
+mailQuotaSize: 4000000000
+
+dn: uid=alice, ou=people, dc=james,dc=org
+changetype: modify
+add: objectClass
+objectClass: extensibleObject
+-
+add: mailQuotaSize
+mailQuotaSize: -1
