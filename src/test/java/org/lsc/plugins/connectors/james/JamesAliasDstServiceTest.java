@@ -109,7 +109,7 @@ class JamesAliasDstServiceTest {
 
 	@BeforeAll
 	static void setup() throws Exception {
-		james = new GenericContainer<>("quanth99/tmail-backend-memory:double-decoding-fixed"); // TODO switch back to TMail latest image after https://github.com/apache/james-project/pull/1697 got merged
+		james = new GenericContainer<>("linagora/tmail-backend:memory-branch-master");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_publickey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/jwt_privatekey"), "/root/conf/");
 		james.withCopyFileToContainer(MountableFile.forClasspathResource("conf/webadmin.properties"), "/root/conf/");
