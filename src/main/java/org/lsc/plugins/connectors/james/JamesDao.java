@@ -322,7 +322,7 @@ public class JamesDao {
 		response.close();
 
 		if (checkResponse(response)) {
-			LOGGER.debug("Updated quota size {} for user {} successfully", quotaSize, user.email);
+			LOGGER.debug("Updated quota size {} for user {} successfully", quotaSize.size, user.email);
 			return true;
 		} else {
 			LOGGER.error(String.format("Error %d (%s - %s) while updating quota size: %s",
