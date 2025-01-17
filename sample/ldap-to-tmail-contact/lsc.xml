@@ -62,7 +62,7 @@
         <conditions>
           <create>true</create>
           <update>true</update>
-          <delete>false</delete>
+          <delete>true</delete>
           <changeId>false</changeId>
         </conditions>
         <dataset>

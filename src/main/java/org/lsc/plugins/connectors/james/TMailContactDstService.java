@@ -78,6 +78,9 @@ public class TMailContactDstService implements IWritableService {
                         } else {
                             return false;
                         }
+                    case DELETE_OBJECT:
+                        LOGGER.debug("Domain contact {} exists on TMail but not in LDAP. Deleting this domain contact.", email);
+                        return jamesDao.removeDomainContact(email);
                     default:
                         LOGGER.debug("{} operation, ignored.", lscModifications.getOperation());
                         return false;
