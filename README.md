@@ -142,6 +142,10 @@ The pivot used for the synchronization in the LSC connector is the email address
 
 The destination attributes for the LSC aliases connector are named `firstname` and `surname`.
 
+For the domain synchronization, you can specify the wished domain list to be synchronized by specify the dedicated ENV variable with key `DOMAIN_LIST_TO_SYNCHRONIZE` and DELIMITER `,`. The synchronization for other domain contacts will be ignored (no create, update, delete operation). For example: `DOMAIN_LIST_TO_SYNCHRONIZE=james.org,linagora.com`.
+
+If you omit this environment variable setting, all domains contact will be synchronized from LDAP.
+
 ### Address Mappings Synchronization
 
 For example, it can be used to synchronize the address mappings stored in the LDAP server to the TMail Server(s) of a TMail deployment.
@@ -326,7 +330,8 @@ The values to configure are:
 The domains used in the aliases must have been previously created in TMail.
 Otherwise, if a user have a single alias pointing to an unknown domain, none of her aliases will be added.
 
-For the domain synchronization, you can specify the wished domain list to be synchronized by specify the dedicated ENV variable with key `DOMAIN_LIST_TO_SYNCHRONIZE` and DELIMITER `,`.
+For the domain synchronization, you can specify the wished domain list to be synchronized by specify the dedicated ENV variable with key `DOMAIN_LIST_TO_SYNCHRONIZE` and DELIMITER `,`. The synchronization for other domain contacts will be ignored (no create, update, delete operation). For example: `DOMAIN_LIST_TO_SYNCHRONIZE=linagora.com` or `DOMAIN_LIST_TO_SYNCHRONIZE=lists.linagora.com`.
+
 If you omit this environment variable setting, all domains contact will be synchronized from LDAP.
 
 The jar of the TMail LSC plugin (`target/lsc-tmail-plugin-1.0-distribution.jar`) must be copied in the `lib` directory of your LSC installation.
