@@ -4,6 +4,7 @@ import static io.restassured.RestAssured.with;
 import static io.restassured.config.EncoderConfig.encoderConfig;
 import static io.restassured.config.RestAssuredConfig.newConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.hamcrest.Matchers.hasSize;
 import static org.lsc.plugins.connectors.james.TMailContactDstService.EMAIL_KEY;
@@ -26,6 +27,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import javax.ws.rs.NotFoundException;
 
 import org.apache.http.HttpStatus;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -308,6 +311,78 @@ class TMailContactDstServiceTest {
     }
 
     @Test
+    void deleteOperationShouldDeleteDomainContactWhenUserDoesNotExistAnymoreOnLDAP() throws Exception {
+        createContact(CONTACT_RENE);
+
+        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_RENE.getEmailAddress());
+        modifications.setLscAttributeModifications(ImmutableList.of());
+
+        boolean applied = testee.apply(modifications);
+
+        assertThat(applied).isTrue();
+        assertNonExistingDomainContact(CONTACT_RENE.getEmailAddress());
+    }
+
+    @Test
+    void deleteOperationShouldNotDeleteContactsOfOtherUsers() throws Exception {
+        createContact(CONTACT_RENE);
+        createContact(CONTACT_TUNG);
+
+        // delete contact of Tung
+        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_TUNG.getEmailAddress());
+        modifications.setLscAttributeModifications(ImmutableList.of());
+
+        boolean applied = testee.apply(modifications);
+
+        // contact of Tung should be deleted, but not contact of Rene
+        assertThat(applied).isTrue();
+        assertNonExistingDomainContact(CONTACT_TUNG.getEmailAddress());
+        assertThat(jamesDao.getContact(CONTACT_RENE.getEmailAddress()))
+            .isEqualTo(new Contact(CONTACT_RENE.getEmailAddress(), CONTACT_RENE.getFirstname(), CONTACT_RENE.getSurname()));
+    }
+
+    @Test
+    void deleteOperationWouldDeleteContactsOfUnwishedDomainByDefault() throws Exception {
+        // If we do not configure the DOMAIN_LIST_TO_SYNCHRONIZE which means we synchronize all domains by default
+        forceSynchronizeDomainListValue(Optional.empty());
+        createContact(CONTACT_RENE);
+        createContact(CONTACT_WITH_UN_WISHED_DOMAIN);
+
+        // Assume unwished domain entry does not exist in filtered LDAP baseDN of james.org domain
+        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress());
+        modifications.setLscAttributeModifications(ImmutableList.of());
+
+        boolean applied = testee.apply(modifications);
+
+        // then unwished domain contact would be deleted
+        assertThat(applied).isTrue();
+        assertNonExistingDomainContact(CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress());
+    }
+
+    @Test
+    void deleteShouldNotDeleteContactsOfUnwishedDomainWhenConfigured() throws Exception {
+        // Only synchronize james.org domain, ignore other domains (e.g. unwisheddomain.org)
+        forceSynchronizeDomainListValue(Arrays.asList("james.org"));
+        createContact(CONTACT_RENE);
+        createContact(CONTACT_WITH_UN_WISHED_DOMAIN);
+
+        // Assume unwished domain entry does not exist in filtered LDAP baseDN of james.org domain
+        LscModifications modifications = new LscModifications(LscModificationType.DELETE_OBJECT);
+        modifications.setMainIdentifer(CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress());
+        modifications.setLscAttributeModifications(ImmutableList.of());
+
+        boolean applied = testee.apply(modifications);
+
+        // then unwished domain contact should not be deleted
+        assertThat(applied).isFalse();
+        assertThat(jamesDao.getContact(CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress()))
+            .isEqualTo(new Contact(CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress(), CONTACT_WITH_UN_WISHED_DOMAIN.getFirstname(), CONTACT_WITH_UN_WISHED_DOMAIN.getSurname()));
+    }
+
+    @Test
     void getBeanShouldReturnNullWhenEmptyDataset() throws Exception {
         assertThat(testee.getBean("email", new LscDatasets(), FROM_SAME_SERVICE)).isNull();
     }
@@ -367,12 +442,21 @@ class TMailContactDstServiceTest {
     }
 
     // using reflection to change DOMAIN_LIST_TO_SYNCHRONIZE value
-    private static void forceSynchronizeDomainListValue(List<String> domainList) throws NoSuchFieldException, IllegalAccessException {
+    private static void forceSynchronizeDomainListValue(Optional<List<String>> domainListOptional) throws NoSuchFieldException, IllegalAccessException {
         final Field field = SyncContactConfig.class.getDeclaredField("DOMAIN_LIST_TO_SYNCHRONIZE");
         field.setAccessible(true);
         final Field modifiersField = Field.class.getDeclaredField("modifiers");
         modifiersField.setAccessible(true);
         modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
-        field.set(null, Optional.of(domainList));
+        field.set(null, domainListOptional);
+    }
+
+    private static void forceSynchronizeDomainListValue(List<String> domainList) throws NoSuchFieldException, IllegalAccessException {
+        forceSynchronizeDomainListValue(Optional.of(domainList));
+    }
+
+    private void assertNonExistingDomainContact(String email) {
+        assertThatThrownBy(() -> jamesDao.getContact(email))
+            .isInstanceOf(NotFoundException.class);
     }
 }
