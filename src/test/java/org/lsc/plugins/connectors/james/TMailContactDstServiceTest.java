@@ -154,7 +154,7 @@ class TMailContactDstServiceTest {
 
     @AfterEach
     void removeAllContact() {
-        jamesDao.getUsersListViaDomainContacts()
+        jamesDao.getAllDomainsContacts()
                 .forEach(user -> jamesDao.removeDomainContact(user.email));
     }
 
@@ -197,6 +197,35 @@ class TMailContactDstServiceTest {
         assertSoftly(softly -> {
             softly.assertThat(listPivots).hasSize(2);
             softly.assertThat(listPivots).containsOnlyKeys(CONTACT_RENE.getEmailAddress(), CONTACT_TUNG.getEmailAddress());
+        });
+    }
+
+    @Test
+    void getListPivotsShouldReturnAllDomainContactsByDefault() throws Exception {
+        // If we do not configure the DOMAIN_LIST_TO_SYNCHRONIZE which means we synchronize all domains by default
+        forceSynchronizeDomainListValue(Optional.empty());
+        createContact(CONTACT_RENE);
+        createContact(CONTACT_WITH_UN_WISHED_DOMAIN);
+
+        Map<String, LscDatasets> listPivots = testee.getListPivots();
+
+        assertSoftly(softly -> {
+            softly.assertThat(listPivots).hasSize(2);
+            softly.assertThat(listPivots).containsOnlyKeys(CONTACT_RENE.getEmailAddress(), CONTACT_WITH_UN_WISHED_DOMAIN.getEmailAddress());
+        });
+    }
+
+    @Test
+    void getListPivotsShouldReturnOnlyWishedDomainContactsWhenConfigured() throws Exception {
+        forceSynchronizeDomainListValue(Arrays.asList("james.org"));
+        createContact(CONTACT_RENE);
+        createContact(CONTACT_WITH_UN_WISHED_DOMAIN);
+
+        Map<String, LscDatasets> listPivots = testee.getListPivots();
+
+        assertSoftly(softly -> {
+            softly.assertThat(listPivots).hasSize(1);
+            softly.assertThat(listPivots).containsOnlyKeys(CONTACT_RENE.getEmailAddress());
         });
     }
 
