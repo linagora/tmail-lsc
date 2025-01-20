@@ -148,7 +148,7 @@ public class TMailContactDstService implements IWritableService {
     @Override
     public Map<String, LscDatasets> getListPivots() throws LscServiceException {
         try {
-            List<User> userList = jamesDao.getUsersListViaDomainContacts();
+            List<User> userList = getDomainContacts();
             Map<String, LscDatasets> listPivots = new HashMap<>();
             for (User user : userList) {
                 listPivots.put(user.email, user.toDatasets());
@@ -163,6 +163,12 @@ public class TMailContactDstService implements IWritableService {
             LOGGER.debug(e.toString(), e);
             throw new LscServiceException(e);
         }
+    }
+
+    private List<User> getDomainContacts() {
+        return SyncContactConfig.DOMAIN_LIST_TO_SYNCHRONIZE
+            .map(jamesDao::getDomainContactsByDomains)
+            .orElseGet(jamesDao::getAllDomainsContacts);
     }
 
     private Contact extractContact(LscModifications lscModifications) {

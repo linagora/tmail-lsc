@@ -695,14 +695,33 @@ public class JamesDao {
 		}
 	}
 
-	public List<User> getUsersListViaDomainContacts() {
+	public List<User> getAllDomainsContacts() {
 		WebTarget target = contactsClient.path("/domains/contacts/all");
-		LOGGER.debug("GETting users with domain contacts list: " + target.getUri().toString());
+		LOGGER.debug("GETting users with all domain contacts list: " + target.getUri().toString());
 		List<String> users = target.request()
 			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
 			.get(new GenericType<List<String>>(){});
 		return users.stream()
 			.map(User::new)
+			.collect(Collectors.toList());
+	}
+
+	public List<User> getDomainContactsByDomains(List<String> domains) {
+		return domains.stream()
+			.flatMap(domain -> getContactsOfDomain(domain).stream())
+			.map(User::new)
+			.collect(Collectors.toList());
+	}
+
+	private List<String> getContactsOfDomain(String domain) {
+		WebTarget target = contactsClient.path("/domains/{domain}/contacts")
+			.resolveTemplate("domain", domain);
+		LOGGER.debug("GETting contact email addresses of domain: " + domain);
+
+		return target.request()
+			.header(HttpHeaders.AUTHORIZATION, authorizationBearer)
+			.get(new GenericType<List<String>>() {})
+			.stream()
 			.collect(Collectors.toList());
 	}
 
