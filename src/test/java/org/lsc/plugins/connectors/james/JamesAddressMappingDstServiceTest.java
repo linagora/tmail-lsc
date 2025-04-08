@@ -374,6 +374,28 @@ class JamesAddressMappingDstServiceTest {
 	}
 
 	@Test
+	void updateShouldBeIgnoredWhenAddressMappingEqualsEmail() throws Exception {
+		createUser(BOB);
+
+		LscModifications modifications = new LscModifications(LscModificationType.UPDATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification modification = new LscDatasetModification(
+				LscDatasetModificationType.REPLACE_VALUES, "addressMappings", ImmutableList.of(BOB));
+		modifications.setLscAttributeModifications(ImmutableList.of(modification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+
+		with()
+			.basePath("/mappings/user")
+		.get(BOB)
+			.then()
+			.statusCode(HttpStatus.SC_OK)
+			.body("mapping",  hasSize(0));
+	}
+
+	@Test
 	void updateWhenAUserWithoutAddressMappingsInJamesButSubAddressMappingInLdapShouldCreateTheSubAddressMappingSuccessfully() throws Exception {
 		createUser(BOB);
 
