@@ -509,6 +509,11 @@ public class JamesDao {
 	}
 
 	private boolean createAlias(User user, Alias alias) {
+		if (alias.source.equals(user.email)) {
+			LOGGER.debug("Alias source is the same as user email, skipping alias creation");
+			return true;
+		}
+
 		try {
 			WebTarget target = aliasesClient.path(user.email).path("sources").path(urlEncode(alias.source));
 			LOGGER.debug("PUTting alias: " + target.getUri().toString());

@@ -437,7 +437,29 @@ class JamesAliasDstServiceTest {
 			.body("source", hasSize(1))
 			.body("[0].source", equalTo(subAddressingAlias));
 	}
-	
+
+	@Test
+	void createShouldBeIgnoredWhenAliasEqualsEmail() throws Exception {
+		String email = "user@james.org";
+		String alias = "user@james.org";
+
+		testee = new JamesAliasDstService(task);
+
+		LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+		modifications.setMainIdentifer(email);
+		LscDatasetModification aliasesModification = new LscDatasetModification(
+			LscDatasetModificationType.REPLACE_VALUES, "sources", ImmutableList.of(alias));
+		modifications.setLscAttributeModifications(ImmutableList.of(aliasesModification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.get(email)
+		.then()
+			.body("source", hasSize(0));
+	}
+
 	@Test
 	public void updateWithNoSourceAttributeModificationShouldFail() throws Exception {
 		String email = "user@james.org";
