@@ -355,6 +355,23 @@ class JamesForwardDstServiceTest {
 			.body("[0].mailAddress", equalTo(ALICE));
 	}
 
+	@Test
+	void createForwardShouldBeIgnoredWhenForwardEqualsEmail() throws Exception {
+		LscModifications modifications = new LscModifications(LscModificationType.CREATE_OBJECT);
+		modifications.setMainIdentifer(BOB);
+		LscDatasetModification lscDatasetModification = new LscDatasetModification(
+			LscDatasetModificationType.ADD_VALUES, "forwards", ImmutableList.of(BOB));
+		modifications.setLscAttributeModifications(ImmutableList.of(lscDatasetModification));
+
+		boolean applied = testee.apply(modifications);
+
+		assertThat(applied).isTrue();
+		with()
+			.get(BOB)
+		.then()
+			.statusCode(HttpStatus.SC_NOT_FOUND);
+	}
+
 
 	@Test
 	void createShouldSucceedWhenAddingOneUserWithTwoForwards() throws Exception {
