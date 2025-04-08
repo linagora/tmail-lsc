@@ -195,6 +195,11 @@ public class JamesDao {
 	}
 
 	private boolean createAddressMapping(User user, AddressMapping addressMapping) {
+		if (addressMapping.getMapping().equals(user.email)) {
+			LOGGER.debug("Address mapping source is the same as user email, skipping address mapping creation");
+			return true;
+		}
+
 		try {
 			WebTarget target = addressMappingsClient.path(String.format(ADDRESS_MAPPING_PATH, user.email, urlEncode(addressMapping.getMapping())));
 			LOGGER.debug("Creating address mapping: " + target.getUri().toString());
