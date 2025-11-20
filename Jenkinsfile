@@ -1,5 +1,8 @@
 pipeline {
     agent any
+    environment {
+        MAVEN_OPTS = '-Djdk.tls.client.protocols=TLSv1.2'
+    }
     tools {
         jdk 'jdk_11'
     }
