@@ -172,7 +172,9 @@ public class JamesDao {
 		List<AddressMapping> jamesAddressMappings = getAddressMappings(user.email);
 		List<AddressMapping> addressMappingsToAddToJames = computeAddressMappingsToAdd(ldapAddressMappings, jamesAddressMappings);
 		List<AddressMapping> addressMappingsToRemoveToJames = computeAddressMappingToRemove(ldapAddressMappings, jamesAddressMappings);
-		return createAddressMappings(user, addressMappingsToAddToJames) && removeAddressMappings(user, addressMappingsToRemoveToJames);
+		boolean created = createAddressMappings(user, addressMappingsToAddToJames);
+		boolean removed = removeAddressMappings(user, addressMappingsToRemoveToJames);
+		return created && removed;
 	}
 
 	private List<AddressMapping> computeAddressMappingsToAdd(List<AddressMapping> ldapAddressMappings, List<AddressMapping> jamesAddressMappings) {
@@ -189,9 +191,8 @@ public class JamesDao {
 
 	private boolean createAddressMappings(User user, List<AddressMapping> addressMappingsToAdd) {
 		return addressMappingsToAdd.stream()
-			.reduce(true,
-				(result, addressMapping) -> result && createAddressMapping(user, addressMapping),
-				(result1, result2) -> result1 && result2);
+			.map(addressMapping -> createAddressMapping(user, addressMapping))
+			.reduce(true, Boolean::logicalAnd);
 	}
 
 	private boolean createAddressMapping(User user, AddressMapping addressMapping) {
@@ -228,9 +229,8 @@ public class JamesDao {
 
 	public boolean removeAddressMappings(User user, List<AddressMapping> addressMappingsToRemove) {
 		return addressMappingsToRemove.stream()
-			.reduce(true,
-				(result, addressMapping) -> result && removeAddressMapping(user, addressMapping),
-				(result1, result2) -> result1 && result2);
+			.map(addressMapping -> removeAddressMapping(user, addressMapping))
+			.reduce(true, Boolean::logicalAnd);
 	}
 
 	private boolean removeAddressMapping(User user, AddressMapping addressMapping) {
@@ -306,9 +306,8 @@ public class JamesDao {
 
 	public boolean createForwards(User user, List<Forward> forwardsToAdd) {
 		return forwardsToAdd.stream()
-			.reduce(true,
-				(result, forward) -> result && createForward(user, forward),
-				(result1, result2) -> result1 && result2);
+			.map(forward -> createForward(user, forward))
+			.reduce(true, Boolean::logicalAnd);
 	}
 
 	public boolean setQuotaSize(User user, QuotaSize quotaSize) {
@@ -389,9 +388,8 @@ public class JamesDao {
 
 	private boolean deleteForwards(User user, List<Forward> forwardsToDelete) {
 		return forwardsToDelete.stream()
-			.reduce(true,
-				(result, forward) -> result && deleteForward(user, forward),
-				(result1, result2) -> result1 && result2);
+			.map(forward -> deleteForward(user, forward))
+			.reduce(true, Boolean::logicalAnd);
 	}
 
 	private boolean deleteForward(User user, Forward forward) {
@@ -503,9 +501,8 @@ public class JamesDao {
 
 	public boolean createAliases(User user, List<Alias> aliasesToAdd) {
 		return aliasesToAdd.stream()
-			.reduce(true,
-				(result, alias) -> result && createAlias(user, alias),
-				(result1, result2) -> result1 && result2); 
+			.map(alias -> createAlias(user, alias))
+			.reduce(true, Boolean::logicalAnd);
 	}
 
 	private boolean createAlias(User user, Alias alias) {
@@ -536,9 +533,8 @@ public class JamesDao {
 
 	public boolean removeAliases(User user, List<Alias> aliasesToRemove) {
 		return aliasesToRemove.stream()
-			.reduce(true,
-				(result, alias) -> result && removeAlias(user, alias),
-				(result1, result2) -> result1 && result2);
+			.map(alias -> removeAlias(user, alias))
+			.reduce(true, Boolean::logicalAnd);
 	}
 
 	private boolean removeAlias(User user, Alias alias) {
@@ -576,7 +572,9 @@ public class JamesDao {
 		List<Alias> aliasesInDestination = getAliases(user.email);
 		List<Alias> aliasesToAdd  =  computeAliasToAdd(updatedAliases, aliasesInDestination);
 		List<Alias> aliasesToRemove  =  computeAliasToRemove(updatedAliases, aliasesInDestination);
-		return removeAliases(user, aliasesToRemove) && createAliases(user, aliasesToAdd);
+		boolean removed = removeAliases(user, aliasesToRemove);
+		boolean created = createAliases(user, aliasesToAdd);
+		return removed && created;
 	}
 
 	public boolean deleteAlias(User user) {
