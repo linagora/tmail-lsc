@@ -273,6 +273,12 @@
 					<groupId>org.forgerock.opendj</groupId>
 					<artifactId>opendj-server</artifactId>
 				</exclusion>
+				<!-- Google Apps connector: only resolvable from dead HTTP repos (java.net 404,
+				     forgerock 401), which Maven 3.8+ blocks anyway. Unused by tmail-lsc. -->
+				<exclusion>
+					<groupId>com.google.gdata.gdata-java-client</groupId>
+					<artifactId>*</artifactId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 		<dependency>
